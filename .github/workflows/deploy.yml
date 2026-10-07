@@ -1,0 +1,53 @@
+# Runs when a change lands on main (normally by merging a pull request): test, build, deploy to Cloudflare, then check the live app.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:        # also allows "Run workflow" by hand from the Actions tab
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false   # never interrupt a deploy that is under way
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test
+
+  deploy:
+    name: Deploy to Cloudflare
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check deploy settings are filled in
+        run: |
+          if grep -q "REPLACE_WITH_YOUR_KV_NAMESPACE_ID" wrangler.toml; then
+            echo "wrangler.toml still has the placeholder KV namespace ID. See SETUP-CICD.md, step 2."; exit 1
+          fi
+      - name: Build the Worker
+        run: npm run build
+        env:
+          GIT_SHA: ${{ github.sha }}
+      - name: Deploy
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
+      - name: Check the live app is serving this build
+        if: ${{ vars.APP_URL != '' }}
+        run: node scripts/smoke.mjs "${{ vars.APP_URL }}" "${{ github.sha }}"

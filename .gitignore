@@ -1,0 +1,10 @@
+# secrets and local-only files
+.env
+.dev.vars
+
+# generated
+dist/
+.tmp/
+data/
+node_modules/
+.wrangler/

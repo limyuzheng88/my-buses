@@ -1,0 +1,31 @@
+# Runs on every pull request and every push to a branch other than main.
+# A pull request cannot be merged unless this passes (once branch protection is on).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches-ignore: [main]
+
+jobs:
+  test:
+    name: Test and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run all test suites
+        run: npm test
+      - name: Build the Worker
+        run: npm run build
+        env:
+          GIT_SHA: ${{ github.sha }}
+      - name: Keep the built Worker for inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker
+          path: dist/worker.js
+          retention-days: 7

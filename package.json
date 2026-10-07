@@ -1,0 +1,15 @@
+{
+  "name": "my-buses",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bus arrival and trip departure notifier for Singapore, on Cloudflare Workers",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "test": "node test/run.mjs",
+    "build": "node build-worker.mjs",
+    "stops": "node scripts/fetch-stops.mjs",
+    "start": "node --use-system-ca server.js",
+    "smoke": "node scripts/smoke.mjs"
+  }
+}

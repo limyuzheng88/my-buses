@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <title>My Buses</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1>My Buses</h1>
+    <span id="status" class="status" aria-live="polite"></span>
+  </header>
+
+  <main>
+    <h2 class="feature">Bus arrival notifier</h2>
+    <section id="stops" aria-label="Bookmarked stops"></section>
+
+    <section class="add">
+      <label for="q">Add a stop</label>
+      <input id="q" type="search" inputmode="search" placeholder="Stop name or 5-digit code" autocomplete="off">
+      <ul id="results"></ul>
+    </section>
+
+    <section id="trip" class="trip" hidden>
+      <h2>Trip departure notifier</h2>
+      <div id="cal"></div>
+      <label for="trip-from">From</label>
+      <select id="trip-from"></select>
+      <label for="trip-to">To</label>
+      <input id="trip-to" type="search" inputmode="search" placeholder="Address, building or postal code" autocomplete="off">
+      <ul id="trip-results"></ul>
+      <div id="trip-chosen"></div>
+      <div id="trip-places" class="chips"></div>
+      <div class="window-row">
+        <label><input type="radio" name="trip-when" value="now" checked> Leave now</label>
+        <label><input type="radio" name="trip-when" value="arrive"> Arrive by</label>
+        <input id="trip-time" type="time" aria-label="Arrive by time">
+      </div>
+      <button id="trip-go" type="button">Find public transport route</button>
+      <div id="trip-alert" aria-live="polite"></div>
+      <div id="trip-out" aria-live="polite"></div>
+    </section>
+
+    <h2 class="feature">Notifications</h2>
+    <section class="alerts">
+      <button id="enable-alerts" type="button">Turn on notifications</button>
+      <button id="test-push" type="button" class="secondary" hidden>Send a test notification</button>
+      <p id="alert-note" class="note">Notifications arrive whether the app is open or closed, and only at the times you set.</p>
+    </section>
+    <section class="log">
+      <h2 class="feature">Notification log</h2>
+      <div id="log-out"></div>
+    </section>
+  </main>
+
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

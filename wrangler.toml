@@ -1,0 +1,24 @@
+# How the Worker is deployed. This file is the source of truth: the pipeline applies it on every deploy,
+# so change settings here (in a pull request), not in the Cloudflare dashboard.
+name = "my-buses"
+main = "dist/worker.js"            # built by `npm run build`
+compatibility_date = "2025-01-01"
+workers_dev = true                 # serve at my-buses.<account>.workers.dev
+keep_vars = true                   # leave any plain variables set in the dashboard alone
+
+# Storage for registered phones, alert settings, planned trips and sign-in tokens.
+# Paste the ID of your existing "my-buses" KV namespace (Cloudflare dashboard, Storage & Databases, KV). It is not a secret.
+[[kv_namespaces]]
+binding = "KV"
+id = "6e2e83101742429da263fa17bbed3101"
+
+# The every-minute schedule that sends notifications. Declared here so it can never go missing again.
+[triggers]
+crons = ["* * * * *"]
+
+# Keep logs of every request and scheduled run (Worker, Observability tab).
+[observability]
+enabled = true
+
+# Secrets are NOT in this file or this repository. They live on the Worker in Cloudflare and survive deploys:
+#   LTA_ACCOUNT_KEY, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, ONEMAP_EMAIL, ONEMAP_PASSWORD, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
