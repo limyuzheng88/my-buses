@@ -337,7 +337,7 @@ async function pushSync(request, env) {
   await kPut(env, `p:${id}:reg`, reg);
   if (isNew || ix.origin !== origin) await kPut(env, 'phones', { origin, ids: isNew ? [...ix.ids, id] : ix.ids });
   const [muted, manual, plan, log] = await Promise.all(PARTS.map((p) => kGet(env, `p:${id}:${p}`)));
-  return json(200, { ok: true, id, rules: reg.stops.length, muted: liveMutes(muted, Date.now()), calendarLinked: Boolean(reg.gs), plan: plan || null, manual: manual && manual.leaveAt > Date.now() ? { ...manual, alertAt: dueMinuteOf(manual) * 60_000 } : null, log: log || [] });
+  return json(200, { ok: true, id, rules: reg.stops.length, muted: liveMutes(muted, Date.now()), calendarLinked: Boolean(reg.gs), plan: plan || null, manual: manual && manual.leaveAt > Date.now() ? { ...manual, alertAt: dueMinuteOf(manual) * 60_000 } : null, log: recentLog(log) });
 }
 
 // Sends two pushes so a failure can be pinned down: an empty ping, and one carrying an encrypted message.
@@ -804,8 +804,10 @@ function sanitizeManual(t) {
   };
 }
 
+const LOG_KEEP_MS = 7 * 86_400_000;   // the log shows the past week
+const recentLog = (log, now = Date.now()) => (Array.isArray(log) ? log : []).filter((e) => e && e.t > now - LOG_KEEP_MS);
 const logSend = (dev, kind, title, status) => { if (status === 208) return;   // a suppressed repeat is not a send
-  dev.log = [{ t: Date.now(), kind, title, status }, ...(dev.log || [])].slice(0, 20); };
+  dev.log = [{ t: Date.now(), kind, title, status }, ...recentLog(dev.log)].slice(0, 50); };
 const ttlUntil = (ts, now) => Math.min(3600, Math.max(300, (ts - now) / 1000));   // seconds a push may wait for the phone
 const dueMinuteOf = (m) => Math.floor((m.leaveAt - m.lead * 60_000) / 60_000);
 

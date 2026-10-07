@@ -630,7 +630,7 @@ async function disconnectCalendar() {
 let serverLog = [];
 const stamp = (ts) => `${sgDate(ts) === sgDate() ? 'Today' : new Date(ts).toLocaleDateString([], { day: 'numeric', month: 'short' })} ${clock(ts)}`;
 async function receivedLog() {
-  try { const r = await (await caches.open('mb-log')).match('/__log'); return r ? await r.json() : []; } catch { return []; }
+  try { const r = await (await caches.open('mb-log')).match('/__log'); const weekAgo = Date.now() - 7 * DAY; return r ? (await r.json()).filter((e) => e && e.t > weekAgo) : []; } catch { return []; }
 }
 async function renderLog() {
   const out = $('log-out');
@@ -644,10 +644,10 @@ async function renderLog() {
       : `Cloudflare schedule: last recorded run ${sched.lastRun} (${sched.minutesAgo} min ago)${sched.healthy ? '' : '. It should run every minute, so it looks stopped: check the Cron Trigger in Cloudflare.'}${sched.lastError ? ` Last error: ${sched.lastError}.` : ''}`;
   out.replaceChildren(...[
     schedLine ? h('div', { class: 'note' }, schedLine) : null,
-    h('div', { class: 'log-head' }, h('span', {}, `Received on this phone (${got.length})`), got.length ? h('button', { type: 'button', class: 'link', onclick: async () => { try { await caches.delete('mb-log'); } catch {} renderLog(); } }, 'Clear') : null),
-    got.length ? h('ul', { class: 'log-list' }, got.slice(0, 30).map((e) => row(e, `${e.title}${e.body ? `: ${e.body.replace(/\n/g, ' · ')}` : ''}`))) : h('div', { class: 'note' }, 'Nothing received yet.'),
-    h('div', { class: 'log-head' }, h('span', {}, 'Departure notifications sent by the server')),
-    serverLog.length ? h('ul', { class: 'log-list' }, serverLog.map((e) => row(e, `${e.title} (${e.kind}; ${e.status >= 200 && e.status < 300 ? 'accepted for delivery' : `failed, code ${e.status}`})`))) : h('div', { class: 'note' }, 'None yet.')].filter(Boolean));
+    h('div', { class: 'log-head' }, h('span', {}, `Received on this phone, past week (${got.length})`), got.length ? h('button', { type: 'button', class: 'link', onclick: async () => { try { await caches.delete('mb-log'); } catch {} renderLog(); } }, 'Clear') : null),
+    got.length ? h('ul', { class: 'log-list' }, got.map((e) => row(e, `${e.title}${e.body ? `: ${e.body.replace(/\n/g, ' · ')}` : ''}`))) : h('div', { class: 'note' }, 'Nothing received yet.'),
+    h('div', { class: 'log-head' }, h('span', {}, `Departure notifications sent by the server, past week (${serverLog.length})`)),
+    serverLog.length ? h('ul', { class: 'log-list' }, serverLog.filter((e) => e.t > Date.now() - 7 * DAY).map((e) => row(e, `${e.title} (${e.kind}; ${e.status >= 200 && e.status < 300 ? 'accepted for delivery' : `failed, code ${e.status}`})`))) : h('div', { class: 'note' }, 'None yet.')].filter(Boolean));
 }
 
 // ---------- boot ----------

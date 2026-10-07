@@ -104,6 +104,9 @@ h2.feature { font-size: 17px; margin: 4px 2px -6px; }
 #enable-alerts.is-on { background: none; color: var(--crit); border: 1px solid var(--line); }
 .leave-toggle.small { font-weight: 400; font-size: 14px; }
 .log-head { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--muted); margin-top: 10px; }
+.log summary { cursor: pointer; padding: 4px 0; }
+.log summary h2 { display: inline; margin: 0; }
+.log-list { max-height: 320px; overflow-y: auto; }
 .log-list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 6px; font-size: 13px; }
 .log-list li { border-top: 1px solid var(--line); padding-top: 6px; }
 .log-list small { color: var(--muted); }
