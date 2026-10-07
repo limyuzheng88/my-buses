@@ -9,13 +9,20 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <header>
-    <h1>My Buses</h1>
-    <span id="status" class="status" aria-live="polite"></span>
-  </header>
+  <div class="top">
+    <header>
+      <h1>My Buses</h1>
+      <span id="status" class="status" aria-live="polite"></span>
+      <button id="logs-btn" type="button" class="logs-btn">Logs</button>
+    </header>
+    <nav id="tabs" class="tabs" role="tablist" aria-label="Pages" hidden>
+      <button type="button" role="tab" data-tab="bus" aria-controls="page-bus">Bus arrivals</button>
+      <button type="button" role="tab" data-tab="trip" aria-controls="trip">Trip departures</button>
+    </nav>
+  </div>
 
   <main>
-    <section class="panel">
+    <section id="page-bus" class="panel" role="tabpanel">
       <h2>Bus arrival notifier</h2>
       <div id="stops" aria-label="Bookmarked stops"></div>
       <div class="add">
@@ -25,7 +32,7 @@
       </div>
     </section>
 
-    <section id="trip" class="panel trip" hidden>
+    <section id="trip" class="panel trip" role="tabpanel" hidden>
       <h2>Trip departure notifier</h2>
       <div id="cal"></div>
       <label for="trip-from">From</label>
@@ -44,14 +51,15 @@
       <div id="trip-alert" aria-live="polite"></div>
       <div id="trip-out" aria-live="polite"></div>
     </section>
-
-    <section class="panel log">
-      <details id="log-box">
-        <summary><h2>Notification log</h2></summary>
-        <div id="log-out"></div>
-      </details>
-    </section>
   </main>
+
+  <dialog id="log-dialog" class="log" aria-labelledby="log-title">
+    <div class="log-top">
+      <h2 id="log-title">Logs</h2>
+      <button id="log-close" type="button" class="link">Close</button>
+    </div>
+    <div id="log-out"></div>
+  </dialog>
 
   <script src="/app.js" type="module"></script>
 </body>
