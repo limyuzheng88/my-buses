@@ -53,7 +53,7 @@ const due = Math.floor((plan.leaveAt - 10 * MIN) / MIN) * MIN;
 ok('one minute early: nothing', (await tick(due - MIN)).length === 0);
 const sent = await tick(due);
 ok('10 minutes before leaving: one notification', sent.length === 1 && sent[0].title === 'Leave in 10 min for Dentist', JSON.stringify(sent));
-ok('message says walk, stop, bus, times', /^Walk 4 min to BLK 254 \(01012\) · Bus 74 at \d{1,2}:\d{2} [AP]M · Arrive \d{1,2}:\d{2} [AP]M for \d{1,2}:\d{2} [AP]M$/.test(sent[0].body) && sent[0].tag === 'trip-e3' && !sent[0].alarm, JSON.stringify(sent[0]));
+ok('message says walk, stop, bus, times', /^Walk 4 min to HOTEL GRAND PACIFIC \(01012\) · Bus 74 at \d{1,2}:\d{2} [AP]M · Arrive \d{1,2}:\d{2} [AP]M for \d{1,2}:\d{2} [AP]M$/.test(sent[0].body) && sent[0].tag === 'trip-e3' && !sent[0].alarm, JSON.stringify(sent[0]));
 ok('one minute later: not repeated', (await tick(due + MIN)).length === 0);
 
 // --- a different lead time moves the alert

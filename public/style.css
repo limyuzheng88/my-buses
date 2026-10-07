@@ -114,3 +114,6 @@ button.secondary.small { margin-top: 10px; padding: 8px; font-size: 13px; }
 .log-list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 6px; font-size: 13px; }
 .log-list li { border-top: 1px solid var(--line); padding-top: 6px; }
 .log-list small { color: var(--muted); }
+.push-ask { display: grid; gap: 6px; font-size: 13px; color: var(--warn); }
+.push-ask button { margin-top: 0; }
+.note.warn { color: var(--warn); }
