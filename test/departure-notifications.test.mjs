@@ -105,6 +105,10 @@ ok('old data migrated: phone, alert times and planned trip kept, old entry remov
 store.clear(); for (const [k, v] of keep) store.set(k, v);
 const lg = (await sync())[1].log;
 ok('server keeps a record of departure notifications it sent', lg.length >= 4 && lg[0].kind.startsWith('planned route') && /^Leave in/.test(lg[0].title) && lg[0].status === 201 && lg[0].t <= Date.now(), JSON.stringify(lg.slice(0, 2)));
+// the log covers the past week only: older entries are not shown
+{ const id = phones()[0]; const old = JSON.parse(store.get(`p:${id}:log`)); store.set(`p:${id}:log`, JSON.stringify([...old, { t: Date.now() - 8 * 86_400_000, kind: 'planned route', title: 'Eight days ago', status: 201 }, { t: Date.now() - 6 * 86_400_000, kind: 'planned route', title: 'Six days ago', status: 201 }]));
+  const wk = (await sync())[1].log;
+  ok('log shows the past week only', wk.some((e) => e.title === 'Six days ago') && !wk.some((e) => e.title === 'Eight days ago'), JSON.stringify(wk.map((e) => e.title))); }
 ok('record is capped', lg.length <= 20);
 ok('turning notifications off removes this phone from the server', (await post('/api/push/unsubscribe', { endpoint }))[1].ok && phones().length === 0);
 ok('after that, a trip cannot be set and nothing is sent', (await post('/api/push/trip', { endpoint, trip: trip(40) }))[0] === 404 && (await tick(Date.now() + 30 * MIN)).length === 0);

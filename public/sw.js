@@ -17,14 +17,15 @@ self.addEventListener('push', (e) => {
   })]));
 });
 
-// Keep the last 50 notifications that reached this phone, so the app can show a log.
+// Keep the past week's notifications that reached this phone (at most 300), so the app can show a log.
 async function logReceived(entry) {
   try {
     const c = await caches.open('mb-log');
     const r = await c.match('/__log');
     const list = r ? await r.json() : [];
-    list.unshift(entry);
-    await c.put('/__log', new Response(JSON.stringify(list.slice(0, 50)), { headers: { 'content-type': 'application/json' } }));
+    const weekAgo = Date.now() - 7 * 86_400_000;
+    const keep = [entry, ...list.filter((e) => e && e.t > weekAgo)].slice(0, 300);
+    await c.put('/__log', new Response(JSON.stringify(keep), { headers: { 'content-type': 'application/json' } }));
   } catch {}
 }
 
