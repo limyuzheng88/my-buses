@@ -36,6 +36,7 @@ let pushSyncTimer;
 
 const arrivals = {};   // stop code -> latest API response (or { error })
 const editing = new Set(); // stop codes showing all services for follow selection
+const openAlarms = new Set(); // "stop|alarm" keys whose editor is open; the rest show as one line
 let lastRefresh = null;
 
 // ---------- tiny DOM helper (never uses innerHTML, so stop names can't inject markup) ----------
@@ -162,7 +163,7 @@ function alarmsSection(stop) {
   if (ask) box.append(ask);
   if (!(stop.followed || []).length) box.append(h('div', { class: 'note' }, 'Tap ⚙ and follow at least one bus first.'));
   stop.alarms.forEach((al, idx) => box.append(alarmEditor(stop, al, idx, changed)));
-  box.append(h('button', { class: 'secondary small', type: 'button', onclick: () => { stop.alarms.push(newAlarm()); changed(); ensurePush(); } }, '+ Add an alert time'));
+  box.append(h('button', { class: 'secondary small', type: 'button', onclick: () => { const al = newAlarm(); stop.alarms.push(al); openAlarms.add(`${stop.code}|${al.id}`); changed(); ensurePush(); } }, '+ Add an alert time'));
   return box;
 }
 
@@ -195,11 +196,27 @@ function alarmEditor(stop, al, idx, changed) {
   if (pushSub && w.active && !stoppedUntil) buttons.append(h('button', { type: 'button', class: 'link', onclick: () => stopAlarm(stop, al) }, 'Stop for now'));
   buttons.append(h('button', { type: 'button', class: 'link danger', onclick: () => { stop.alarms.splice(idx, 1); changed(); } }, 'Remove'));
 
+  // Closed: one line saying when it runs. Tap it to edit.
+  if (!openAlarms.has(key)) {
+    const short = !hasWhen || al.from === al.to ? status : stoppedUntil ? `Stopped until ${clock(stoppedUntil)}` : w.active && pushSub ? `Running now until ${clock(w.end)}` : '';
+    return h('button', { type: 'button', class: `alarm alarm-line${w.active && pushSub && !stoppedUntil ? ' running' : ''}`, 'aria-expanded': 'false', onclick: () => { openAlarms.add(key); render(); } },
+      h('span', { class: 'alarm-when' }, alarmSummary(al)), short ? h('span', { class: 'alarm-state' }, short) : null, h('span', { class: 'alarm-edit' }, 'Edit'));
+  }
+  buttons.append(h('button', { type: 'button', class: 'link', onclick: () => { openAlarms.delete(key); render(); } }, 'Done'));
   return h('div', { class: 'alarm' },
     days, dates,
     h('div', { class: 'window-row' }, 'from', time('from', 'Start time'), 'to', time('to', 'End time'), 'every', every, 'min'),
     h('div', { class: 'note' }, status),
     buttons);
+}
+
+// "Weekdays · 07:30 to 09:00 · every 5 min"
+function alarmSummary(al) {
+  const has = (...ds) => ds.every((d) => al.days.includes(d));
+  const days = al.days.length === 7 ? 'Every day' : al.days.length === 5 && has(1, 2, 3, 4, 5) ? 'Weekdays' : al.days.length === 2 && has(6, 0) ? 'Weekends'
+    : DAY_CHIPS.filter(([d]) => al.days.includes(d)).map(([, label]) => label).join(', ');
+  const dates = al.dates.length === 1 ? niceDate(al.dates[0]) : al.dates.length ? `${al.dates.length} dates` : '';
+  return `${[days, dates].filter(Boolean).join(' + ') || 'No days chosen'} · ${al.from} to ${al.to} · every ${al.every} min`;
 }
 
 async function stopAlarm(stop, al) {
@@ -503,7 +520,7 @@ async function initTrips() {
   try {
     const s = await (await fetch('/api/status')).json();
     if (!s.trips) return;
-    $('trip').hidden = false;
+    tripsReady = true; showTab(tab);
     $('trip-to').addEventListener('input', onPlaceSearch);
     $('trip-go').addEventListener('click', async () => { await ensurePush(); planTrip(); });
     renderTripInputs();
@@ -618,6 +635,44 @@ async function renderLog() {
     h('div', { class: 'log-head' }, h('span', {}, `Departure notifications sent by the server, past week (${serverLog.length})`)),
     serverLog.length ? h('ul', { class: 'log-list' }, serverLog.filter((e) => e.t > Date.now() - 7 * DAY).map((e) => row(e, `${e.title} (${e.kind}; ${e.status >= 200 && e.status < 300 ? 'accepted for delivery' : `failed, code ${e.status}`})`))) : h('div', { class: 'note' }, 'None yet.')].filter(Boolean));
 }
+
+// ---------- pages: Buses and Trips ----------
+// One page shows at a time. Switch with the tabs, or by swiping left or right.
+const TABS = ['bus', 'trip'];
+let tripsReady = false;   // the Trips page exists only when the server has trip planning set up
+let tab = 'bus';
+try { if (localStorage.getItem('mybuses.tab') === 'trip') tab = 'trip'; } catch {}
+function showTab(next) {
+  tab = TABS.includes(next) ? next : 'bus';
+  try { localStorage.setItem('mybuses.tab', tab); } catch {}
+  const shown = tripsReady ? tab : 'bus';   // until trip planning is known to be available, show Buses
+  $('tabs').hidden = !tripsReady;
+  $('page-bus').hidden = shown !== 'bus';
+  $('trip').hidden = shown !== 'trip';
+  for (const b of document.querySelectorAll('#tabs button')) { const on = b.dataset.tab === shown; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); }
+}
+for (const b of document.querySelectorAll('#tabs button')) b.addEventListener('click', () => { showTab(b.dataset.tab); window.scrollTo(0, 0); });
+{ // swipe: mostly sideways, at least 70px, not started at the screen edge (the phone's own back gesture) or on a control you drag
+  let x0 = null, y0 = 0;
+  const main = document.querySelector('main');
+  main.addEventListener('touchstart', (e) => {
+    const t = e.touches[0];
+    x0 = e.touches.length === 1 && t.clientX > 24 && t.clientX < window.innerWidth - 24 && !e.target.closest('input, select, textarea') ? t.clientX : null; y0 = t.clientY;
+  }, { passive: true });
+  main.addEventListener('touchend', (e) => {
+    if (x0 == null || !tripsReady) return;
+    const t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0; x0 = null;
+    if (Math.abs(dx) < 70 || Math.abs(dx) < 2 * Math.abs(dy)) return;
+    const next = dx < 0 ? 'trip' : 'bus';
+    if (next !== tab) { showTab(next); window.scrollTo(0, 0); }
+  }, { passive: true });
+}
+showTab(tab);
+
+// ---------- logs: a button at the top right opens them ----------
+$('logs-btn').addEventListener('click', () => { renderLog(); $('log-dialog').showModal(); });
+$('log-close').addEventListener('click', () => $('log-dialog').close());
+$('log-dialog').addEventListener('click', (e) => { if (e.target === $('log-dialog')) $('log-dialog').close(); });   // tap outside to close
 
 // ---------- boot ----------
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
