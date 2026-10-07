@@ -15,8 +15,8 @@ const tick = async (ts) => { received.length = 0; let p; await w.scheduled({ sch
 const ok = (name, cond, extra = '') => console.log(cond ? 'PASS' : 'FAIL', name, cond ? '' : extra);
 const MIN = 60e3, endpoint = 'http://127.0.0.1:3299/push/phone';
 const trip = (leaveInMin, extra = {}) => { const s = Date.now() + leaveInMin * MIN; return { title: 'BUGIS JUNCTION', leaveAt: s, arriveAt: s + 27 * MIN, arriveBy: null, onTime: true, lead: 10, legs: [
-  { mode: 'walk', route: '', from: { name: 'Origin', code: null }, to: { name: 'BLK 254', code: '01012' }, start: s, minutes: 4 },
-  { mode: 'bus', route: '74', from: { name: 'BLK 254', code: '01012' }, to: { name: 'BUGIS STN', code: '01113' }, start: s + 4 * MIN, minutes: 20 },
+  { mode: 'walk', route: '', from: { name: 'Origin', code: null }, to: { name: 'HOTEL GRAND PACIFIC', code: '01012' }, start: s, minutes: 4 },
+  { mode: 'bus', route: '74', from: { name: 'HOTEL GRAND PACIFIC', code: '01012' }, to: { name: 'BUGIS STN', code: '01113' }, start: s + 4 * MIN, minutes: 20 },
   { mode: 'walk', route: '', from: { name: 'BUGIS STN', code: null }, to: { name: 'Destination', code: null }, start: s + 24 * MIN, minutes: 3 } ], ...extra }; };
 const sync = () => post('/api/push/sync', { subscription: { endpoint, keys }, stops: [] });
 
@@ -41,7 +41,7 @@ ok('stays deliverable until it is time to leave (10 to 11 min), not just 5', rec
 ok('scheduler: a run that sent something is recorded straight away', JSON.parse(store.get('cron')).lastSend === due && (await statusOf()).lastSend !== null, store.get('cron'));
 const rep = await (await w.fetch(new Request('https://my-buses.example.workers.dev/api/push/run'), env)).json();
 ok('run report lists recent sends and who sent them', Object.values(rep.recentDepartureSends)[0][0].includes('Leave in 10 min for BUGIS JUNCTION [planned route, sent by the schedule; push service 201]') && rep.phones === 1, JSON.stringify(rep.recentDepartureSends));
-ok('message has walk, stop, bus and arrival', /^Walk 4 min to BLK 254 \(01012\) · Bus 74 at \d{1,2}:\d{2} [AP]M · Arrive \d{1,2}:\d{2} [AP]M$/.test(m1[0].body) && !m1[0].alarm, m1[0]?.body);
+ok('message has walk, stop, bus and arrival', /^Walk 4 min to HOTEL GRAND PACIFIC \(01012\) · Bus 74 at \d{1,2}:\d{2} [AP]M · Arrive \d{1,2}:\d{2} [AP]M$/.test(m1[0].body) && !m1[0].alarm, m1[0]?.body);
 ok('not repeated on later runs', (await tick(due + MIN)).length === 0 && (await tick(due + 5 * MIN)).length === 0);
 const s1 = (await sync())[1];
 ok('settings sync keeps the planned trip and reports it to the app', s1.manual && s1.manual.title === 'BUGIS JUNCTION' && s1.manual.sent === true && dev().manual);

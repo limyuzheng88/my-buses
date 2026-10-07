@@ -158,10 +158,11 @@ const DAY_CHIPS = [[1, 'Mon'], [2, 'Tue'], [3, 'Wed'], [4, 'Thu'], [5, 'Fri'], [
 function alarmsSection(stop) {
   const changed = () => { save(); render(); };
   const box = h('div', { class: 'window' }, h('div', { class: 'window-title' }, 'Notify me of bus times at these times only'));
-  if (!pushSub) box.append(h('div', { class: 'note' }, 'Turn on notifications below to use this.'));
-  else if (!(stop.followed || []).length) box.append(h('div', { class: 'note' }, 'Tap ⚙ and follow at least one bus first.'));
+  const ask = stop.alarms.length ? pushPrompt('these alert times will not reach you') : null;
+  if (ask) box.append(ask);
+  if (!(stop.followed || []).length) box.append(h('div', { class: 'note' }, 'Tap ⚙ and follow at least one bus first.'));
   stop.alarms.forEach((al, idx) => box.append(alarmEditor(stop, al, idx, changed)));
-  box.append(h('button', { class: 'secondary small', type: 'button', onclick: () => { stop.alarms.push(newAlarm()); changed(); } }, '+ Add an alert time'));
+  box.append(h('button', { class: 'secondary small', type: 'button', onclick: () => { stop.alarms.push(newAlarm()); changed(); ensurePush(); } }, '+ Add an alert time'));
   return box;
 }
 
@@ -275,51 +276,30 @@ async function fixSeedNames() {
   }
 }
 
-// ---------- alerts (while the page is open) ----------
-const alertBtn = document.getElementById('enable-alerts');
-
-function syncAlertButton() {
-  const granted = 'Notification' in window && Notification.permission === 'granted' && state.alertsOn;
-  alertBtn.disabled = false;
-  alertBtn.textContent = granted ? 'Turn off all notifications' : 'Turn on notifications';
-  alertBtn.classList.toggle('is-on', granted);
-  if (!('Notification' in window)) { alertBtn.disabled = true; alertBtn.textContent = 'Alerts not supported in this browser'; }
-  if (testBtn) testBtn.hidden = !pushSub;
-  if (alertNote) {
-    alertNote.textContent = !granted ? 'Off: this phone gets no bus, route or calendar notifications.'
-      : pushSub ? 'On: bus alert times you set, routes you plan, and calendar appointments (once connected). They arrive whether the app is open or closed.'
-        : 'Notifications are allowed, but this server cannot send them yet.';
-  }
+// ---------- permission to notify ----------
+// There is no on/off switch. Notifications follow what is set up: bus alert times on a stop, a planned route, a connected calendar.
+// The browser still needs the phone owner's permission once, so the app asks at the moment they first set one of those up.
+let pushChecked = false;   // true once we know whether this server can send notifications
+const canAskPush = () => 'Notification' in window && pushAvailable;
+async function ensurePush() {   // call from a tap; resolves true when this phone can receive notifications
+  if (pushSub) return true;
+  if (!canAskPush()) return false;
+  const perm = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+  state.alertsOn = perm === 'granted'; save();
+  if (perm === 'granted') await initPush();
+  else { render(); renderDeparture(); if (cal) renderCal(); }
+  return Boolean(pushSub);
 }
-alertBtn.addEventListener('click', async () => {
-  if (state.alertsOn && Notification.permission === 'granted') {   // turn everything off for this phone
-    alertBtn.disabled = true;
-    try {
-      if (pushSub) {
-        await fetch('/api/push/unsubscribe', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ endpoint: pushSub.endpoint }) });
-        await pushSub.unsubscribe();
-      }
-    } catch (e) { console.warn('turning off failed', e); }
-    pushSub = null; departure = null; serverPlan = null; calendarLinked = false;
-    state.alertsOn = false; save(); syncAlertButton(); render(); renderDeparture(); if (cal) renderCal();
-    return;
-  }
-  const perm = await Notification.requestPermission();
-  state.alertsOn = perm === 'granted'; save(); syncAlertButton();
-  if (perm === 'granted') { notify('Notifications are on', 'You will only be notified at the times you set.'); await initPush(); }
-});
-
-async function notify(title, body, tag = title) {
-  try {
-    const reg = await navigator.serviceWorker?.getRegistration();
-    if (reg) return reg.showNotification(title, { body, tag, icon: '/icon.svg' });
-  } catch {}
-  new Notification(title, { body, tag });
+// What to show where notifications are needed but this phone cannot receive them yet. Null when all is well.
+function pushPrompt(what) {
+  if (pushSub || !pushChecked) return null;
+  if (!canAskPush()) return h('div', { class: 'note' }, 'This browser cannot receive notifications.');
+  if (Notification.permission === 'denied') return h('div', { class: 'note warn' }, `Notifications are blocked for this site, so ${what}. Allow them in your browser's site settings, then reopen the app.`);
+  return h('div', { class: 'push-ask' }, h('span', {}, `Notifications are not allowed on this phone yet, so ${what}.`),
+    h('button', { type: 'button', class: 'secondary small', onclick: () => ensurePush() }, 'Allow notifications'));
 }
 
 // ---------- alerts when the app is closed (push) ----------
-const testBtn = document.getElementById('test-push');
-const alertNote = document.getElementById('alert-note');
 const keyBytes = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
 
 async function initPush() {
@@ -339,8 +319,8 @@ async function initPush() {
       if (pushSub) schedulePushSync();
     }
   } catch (e) { console.warn('push setup failed', e); }
-  syncAlertButton();
-  render();
+  pushChecked = true;
+  render(); if ($('trip-alert')) renderDeparture(); if (cal) renderCal();
 }
 
 const pushRules = () => state.stops.map(({ code, name, followed, threshold, alarms }) => ({ code, name, followed, threshold, alarms }));
@@ -358,19 +338,6 @@ function schedulePushSync() {
   clearTimeout(pushSyncTimer);
   pushSyncTimer = setTimeout(() => pushSyncNow().catch((e) => console.warn('push sync failed', e)), 1500);
 }
-
-testBtn?.addEventListener('click', async () => {
-  if (!pushSub) return;
-  testBtn.disabled = true;
-  alertNote.textContent = 'Sending a test…';
-  try {
-    clearTimeout(pushSyncTimer);
-    await pushSyncNow();
-    const r = await (await fetch('/api/push/test', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ endpoint: pushSub.endpoint }) })).json();
-    alertNote.textContent = `Test sent (ping ${r.ping}, message ${r.message}). You should get two notifications within a few seconds.`;
-  } catch (e) { alertNote.textContent = `Test failed: ${e.message}`; }
-  testBtn.disabled = false;
-});
 
 // ---------- trip planning (only when the server has OneMap set up) ----------
 if (!Array.isArray(state.places)) state.places = [];   // saved places: { name, address, lat, lng }
@@ -502,7 +469,7 @@ async function scheduleDeparture() {
   const o = tripPlan && tripPlan.options[0];
   departureNote = '';
   if (!o) return;
-  if (!pushSub) { departureNote = 'Turn on notifications below to be told before you need to leave.'; return; }
+  if (!pushSub) return;   // renderDeparture explains and offers to allow notifications
   if (o.leaveAt - Date.now() < 60_000) {   // leaving now: nothing to wait for, and any earlier trip's notification no longer applies
     if (departure) { try { await setDeparture(null); } catch {} departure = null; }
     return;
@@ -516,6 +483,8 @@ async function scheduleDeparture() {
 function renderDeparture() {
   const box = $('trip-alert');
   if (departureNote) return box.replaceChildren(h('div', { class: 'note' }, departureNote));
+  const o = tripPlan && tripPlan.options[0];
+  if (!pushSub && o && o.leaveAt - Date.now() >= 60_000) { const ask = pushPrompt('you will not be told when to leave'); return box.replaceChildren(...(ask ? [ask] : [])); }
   if (!departure || departure.leaveAt < Date.now()) return box.replaceChildren();
   const lead = h('input', { type: 'number', min: 1, max: 60, value: departure.lead, 'aria-label': 'Minutes of warning before leaving', onchange: async (e) => {
     state.trip.lead = Math.min(60, Math.max(1, Math.round(Number(e.target.value)) || 10)); save();
@@ -536,7 +505,7 @@ async function initTrips() {
     if (!s.trips) return;
     $('trip').hidden = false;
     $('trip-to').addEventListener('input', onPlaceSearch);
-    $('trip-go').addEventListener('click', () => planTrip());
+    $('trip-go').addEventListener('click', async () => { await ensurePush(); planTrip(); });
     renderTripInputs();
     if (s.calendar) { loadCalendar(); refreshFixQuietly(); }
   } catch {}
@@ -576,7 +545,7 @@ function leaveAlertSettings() {
   const tr = state.trip;
   const changed = () => { save(); renderCal(); };
   const originIdx = tr.origin ? state.places.findIndex((p) => p.lat === tr.origin.lat && p.lng === tr.origin.lng) : -1;
-  const status = !pushSub ? 'Turn on notifications below to be told before you need to leave for these.'
+  const status = !pushSub ? (pushPrompt('you will not be told when to leave for these') || '')
     : !calendarLinked ? 'Linking this phone to your calendar… reopen the app if this stays.'
     : !tr.origin && !(state.lastFix && Date.now() - state.lastFix.t < 30 * 60_000) ? 'Choose a starting place, so a route can be planned when the app is closed.'
     : !serverPlan ? 'Watching your calendar. A trip is planned once an appointment with a location is within 3 hours (checked every 5 minutes).'
@@ -588,7 +557,7 @@ function leaveAlertSettings() {
       h('select', { 'aria-label': 'Starting place when the app is closed', onchange: (e) => { const p = state.places[Number(e.target.value)]; tr.origin = p ? { name: p.name, lat: p.lat, lng: p.lng } : null; changed(); } },
         h('option', { value: '-1', selected: originIdx < 0 }, state.places.length ? 'choose a saved place' : 'save a place first'),
         ...state.places.map((p, i) => h('option', { value: String(i), selected: i === originIdx }, p.name)))),
-    h('div', { class: 'note' }, status));
+    typeof status === 'string' ? h('div', { class: 'note' }, status) : status);
 }
 
 // When leave alerts are on and location is already allowed, note where you are each time the app opens.
@@ -652,7 +621,6 @@ async function renderLog() {
 
 // ---------- boot ----------
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
-syncAlertButton();
 render();
 fixSeedNames();
 initPush();

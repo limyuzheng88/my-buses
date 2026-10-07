@@ -59,7 +59,7 @@ Open `https://<your-worker-address>/api/status`. It should show `"keySet":true` 
 4. **Code.** Paste the latest `dist/worker.js` into Edit code and Deploy.
 5. **Schedule.** Worker, Settings, Trigger Events, Add, Cron Triggers. Cron expression: `* * * * *` (every minute).
 6. **Check.** Open `<your address>/api/status`. It should show `"push":true`.
-7. **On your Android phone, in Chrome:** open the address, tap "Turn on leave-now alerts" and allow notifications. Tap "Send a test notification". Two notifications should arrive: a "Ping received" one and a "Test alert" one.
+7. **On your Android phone, in Chrome:** open the address, add a stop, and tap "+ Add an alert time". The browser asks to allow notifications; allow it.
 8. On each stop, follow at least one bus (gear icon), then add one or more alert times. Each has its own days of the week, specific dates, hours, and how often to notify (default every 5 minutes, minimum 2).
 
 How it works: every minute Cloudflare runs the Worker. While an alert time is running, it sends the bus times for that stop at your chosen interval, counted from the start of the hours, until the hours end or you tap "Stop these alerts" on a notification (or "Stop for now" in the app). Stopping lasts until that run's hours end; the next run starts as normal. If the end time is earlier than the start time, the run continues past midnight.
@@ -101,7 +101,7 @@ If sign-in returns to the app with "did not complete", the app shows Google's re
 
 Needs all of the above: closed-app alerts, trip planning and Google Calendar. No extra Cloudflare setup.
 
-In the app, on your phone: turn on leave-now alerts, connect Google Calendar, save your usual starting place (for example Home), then under Next appointments tick "Alert me before I need to leave", set the minutes, and choose the starting place.
+In the app, on your phone: connect Google Calendar, allow notifications when asked, save your usual starting place (for example Home), then under Next appointments set the minutes and choose the starting place.
 
 How it works:
 - Every 5 minutes the Worker reads your calendar. When the next appointment that has a location starts within 3 hours, it plans a public transport route that arrives by the start time.
@@ -118,4 +118,4 @@ Check it: `<your address>/api/push/run?force=1` plans now and sends a "Preview:"
 
 **Trip departure notifier.** Plan a route and the app asks the Worker to notify this phone N minutes before the suggested departure (default 10), whether the app is open or closed. One planned trip is held per phone; planning another replaces it, and Cancel removes it. If less than N minutes remain, the notification is sent at once. With Google Calendar connected and "Alert me before I need to leave" ticked, the same kind of notification is sent for your next appointment without you planning anything.
 
-Both need notifications turned on in the app on that phone ("Turn on notifications").
+There is no on/off switch. Notifications follow what is set up: alert times on a stop, a planned route, a connected calendar. The app asks for the browser's permission the first time you set one up; to stop a kind of notification, remove what causes it (the alert time, the planned trip, or the calendar connection).

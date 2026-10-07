@@ -22,8 +22,8 @@ export const server = http.createServer(async (req, res) => {
     const [mo, d, y] = u.searchParams.get('date').split('-'); const dep = Date.parse(`${y}-${mo}-${d}T${u.searchParams.get('time')}+08:00`);
     om.routeQueries.push({ dep, params: Object.fromEntries(u.searchParams) });
     const it = (offMin) => { const s = dep + offMin * 60000; return { duration: 27 * 60, startTime: s, endTime: s + 27 * 60000, walkTime: 7 * 60, transitTime: 20 * 60, transfers: 0, fare: '1.19', legs: [
-      { mode: 'WALK', startTime: s, endTime: s + 4 * 60000, duration: 240, from: { name: 'Origin' }, to: { name: 'BLK 254', stopId: 'FERRY:01012', stopCode: '01012' } },
-      { mode: 'BUS', route: '74', startTime: s + 4 * 60000, endTime: s + 24 * 60000, duration: 1200, numIntermediateStops: 8, from: { name: 'BLK 254', stopId: 'FERRY:01012', stopCode: '01012' }, to: { name: 'BUGIS STN', stopId: 'FERRY:01113' } },
+      { mode: 'WALK', startTime: s, endTime: s + 4 * 60000, duration: 240, from: { name: 'Origin' }, to: { name: 'HOTEL GRAND PACIFIC', stopId: 'FERRY:01012', stopCode: '01012' } },
+      { mode: 'BUS', route: '74', startTime: s + 4 * 60000, endTime: s + 24 * 60000, duration: 1200, numIntermediateStops: 8, from: { name: 'HOTEL GRAND PACIFIC', stopId: 'FERRY:01012', stopCode: '01012' }, to: { name: 'BUGIS STN', stopId: 'FERRY:01113' } },
       { mode: 'WALK', startTime: s + 24 * 60000, endTime: s + 27 * 60000, duration: 180, from: { name: 'BUGIS STN' }, to: { name: 'Destination' } } ] }; };
     return send(200, { plan: { itineraries: [it(12), it(2), it(7)] } });
   }
