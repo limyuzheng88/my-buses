@@ -637,36 +637,47 @@ async function renderLog() {
 }
 
 // ---------- pages: Buses and Trips ----------
-// One page shows at a time. Switch with the tabs, or by swiping left or right.
-const TABS = ['bus', 'trip'];
+// The two pages sit side by side in a sideways-scrolling strip that snaps to one page. Swiping drags the strip with the finger,
+// and the highlight behind the tabs moves in step with it. Tapping a tab scrolls the strip smoothly.
+const pager = $('pager'), pill = $('tab-pill');
+const pages = { bus: $('page-bus'), trip: $('trip') };
+const calm = window.matchMedia('(prefers-reduced-motion: reduce)');
 let tripsReady = false;   // the Trips page exists only when the server has trip planning set up
-let tab = 'bus';
+let tab = 'bus';          // the page the user chose; remembered between visits
+let sliding = false;
+let settleTimer = null;
 try { if (localStorage.getItem('mybuses.tab') === 'trip') tab = 'trip'; } catch {}
-function showTab(next) {
-  tab = TABS.includes(next) ? next : 'bus';
+const maxScroll = () => pager.scrollWidth - pager.clientWidth;
+const progress = () => (tripsReady && maxScroll() > 0 ? Math.min(1, Math.max(0, pager.scrollLeft / maxScroll())) : 0);   // 0 = Buses, 1 = Trips
+function paintTabs() {
+  const p = progress();
+  pill.style.transform = `translateX(calc(${p.toFixed(4)} * (100% + 4px)))`;
+  for (const b of document.querySelectorAll('#tabs button')) { const on = (b.dataset.tab === 'trip') === (p > 0.5); b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); }
+}
+// At rest the strip is exactly as tall as the page in view, so a short page has no empty space under it. While sliding, both pages show in full.
+function fitHeight() { pager.style.height = sliding ? '' : `${pages[tripsReady ? tab : 'bus'].offsetHeight}px`; }
+function settle() {
+  sliding = false;
+  if (tripsReady) { const now = progress() > 0.5 ? 'trip' : 'bus'; if (now !== tab) { tab = now; try { localStorage.setItem('mybuses.tab', tab); } catch {} } }
+  paintTabs(); fitHeight();
+}
+pager.addEventListener('scroll', () => {
+  if (!sliding) { sliding = true; fitHeight(); }
+  paintTabs();
+  clearTimeout(settleTimer); settleTimer = setTimeout(settle, 140);
+}, { passive: true });
+function showTab(next, smooth = false) {
+  tab = next === 'trip' ? 'trip' : 'bus';
   try { localStorage.setItem('mybuses.tab', tab); } catch {}
-  const shown = tripsReady ? tab : 'bus';   // until trip planning is known to be available, show Buses
   $('tabs').hidden = !tripsReady;
-  $('page-bus').hidden = shown !== 'bus';
-  $('trip').hidden = shown !== 'trip';
-  for (const b of document.querySelectorAll('#tabs button')) { const on = b.dataset.tab === shown; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); }
+  pages.trip.hidden = !tripsReady;
+  const left = tripsReady && tab === 'trip' ? maxScroll() : 0;
+  if (smooth && !calm.matches && Math.abs(pager.scrollLeft - left) > 1) pager.scrollTo({ left, behavior: 'smooth' });
+  else { pager.scrollTo({ left, behavior: 'instant' }); clearTimeout(settleTimer); settle(); }
 }
-for (const b of document.querySelectorAll('#tabs button')) b.addEventListener('click', () => { showTab(b.dataset.tab); window.scrollTo(0, 0); });
-{ // swipe: mostly sideways, at least 70px, not started at the screen edge (the phone's own back gesture) or on a control you drag
-  let x0 = null, y0 = 0;
-  const main = document.querySelector('main');
-  main.addEventListener('touchstart', (e) => {
-    const t = e.touches[0];
-    x0 = e.touches.length === 1 && t.clientX > 24 && t.clientX < window.innerWidth - 24 && !e.target.closest('input, select, textarea') ? t.clientX : null; y0 = t.clientY;
-  }, { passive: true });
-  main.addEventListener('touchend', (e) => {
-    if (x0 == null || !tripsReady) return;
-    const t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0; x0 = null;
-    if (Math.abs(dx) < 70 || Math.abs(dx) < 2 * Math.abs(dy)) return;
-    const next = dx < 0 ? 'trip' : 'bus';
-    if (next !== tab) { showTab(next); window.scrollTo(0, 0); }
-  }, { passive: true });
-}
+for (const b of document.querySelectorAll('#tabs button')) b.addEventListener('click', () => showTab(b.dataset.tab, true));
+if ('ResizeObserver' in window) { const ro = new ResizeObserver(() => { if (!sliding) fitHeight(); }); ro.observe(pages.bus); ro.observe(pages.trip); }
+window.addEventListener('resize', () => showTab(tab));
 showTab(tab);
 
 // ---------- logs: a button at the top right opens them ----------
