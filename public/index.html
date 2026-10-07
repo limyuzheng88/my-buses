@@ -16,12 +16,14 @@
       <button id="logs-btn" type="button" class="logs-btn">Logs</button>
     </header>
     <nav id="tabs" class="tabs" role="tablist" aria-label="Pages" hidden>
+      <span id="tab-pill" class="tab-pill" aria-hidden="true"></span>
       <button type="button" role="tab" data-tab="bus" aria-controls="page-bus">Bus arrivals</button>
       <button type="button" role="tab" data-tab="trip" aria-controls="trip">Trip departures</button>
     </nav>
   </div>
 
   <main>
+   <div id="pager" class="pager">
     <section id="page-bus" class="panel" role="tabpanel">
       <h2>Bus arrival notifier</h2>
       <div id="stops" aria-label="Bookmarked stops"></div>
@@ -51,6 +53,7 @@
       <div id="trip-alert" aria-live="polite"></div>
       <div id="trip-out" aria-live="polite"></div>
     </section>
+   </div>
   </main>
 
   <dialog id="log-dialog" class="log" aria-labelledby="log-title">
