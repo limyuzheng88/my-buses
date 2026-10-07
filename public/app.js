@@ -1,6 +1,7 @@
 // My Buses – front end. State lives in localStorage (no accounts in v1).
 
 const REFRESH_MS = 20_000;
+const APP_BUILD = /*__APP_BUILD__*/'dev';   // filled in by the build; the version of the app this page is running
 const STORE_KEY = 'mybuses.v1';
 
 // ---------- state ----------
@@ -623,12 +624,13 @@ async function renderLog() {
   if (!out) return;
   const got = await receivedLog();
   const row = (e, text) => h('li', {}, h('small', {}, stamp(e.t)), ` ${text}`);
-  let sched = null;
-  try { sched = (await (await fetch('/api/status')).json()).scheduler; } catch {}
+  let sched = null, serverBuild = null;
+  try { const s = await (await fetch('/api/status')).json(); sched = s.scheduler; serverBuild = s.build || null; } catch {}
   const schedLine = !sched ? null
     : sched.lastRun == null ? 'Cloudflare schedule: no run recorded yet (recorded every 10 minutes). If this stays, the Cron Trigger is missing.'
       : `Cloudflare schedule: last recorded run ${sched.lastRun} (${sched.minutesAgo} min ago)${sched.healthy ? '' : '. It should run every minute, so it looks stopped: check the Cron Trigger in Cloudflare.'}${sched.lastError ? ` Last error: ${sched.lastError}.` : ''}`;
   out.replaceChildren(...[
+    h('div', { class: 'note' }, `App version: ${APP_BUILD}`, serverBuild && serverBuild !== APP_BUILD ? h('button', { type: 'button', class: 'link', onclick: () => location.reload() }, ' Update available: tap to reload') : null),
     schedLine ? h('div', { class: 'note' }, schedLine) : null,
     h('div', { class: 'log-head' }, h('span', {}, `Received on this phone, past week (${got.length})`), got.length ? h('button', { type: 'button', class: 'link', onclick: async () => { try { await caches.delete('mb-log'); } catch {} renderLog(); } }, 'Clear') : null),
     got.length ? h('ul', { class: 'log-list' }, got.map((e) => row(e, `${e.title}${e.body ? `: ${e.body.replace(/\n/g, ' · ')}` : ''}`))) : h('div', { class: 'note' }, 'Nothing received yet.'),
@@ -677,13 +679,29 @@ function showTab(next, smooth = false) {
 }
 for (const b of document.querySelectorAll('#tabs button')) b.addEventListener('click', () => showTab(b.dataset.tab, true));
 if ('ResizeObserver' in window) { const ro = new ResizeObserver(() => { if (!sliding) fitHeight(); }); ro.observe(pages.bus); ro.observe(pages.trip); }
-window.addEventListener('resize', () => showTab(tab));
+// Re-align after the width changes (rotation). Height-only changes, such as the browser's address bar sliding away or the keyboard opening, must not move the strip.
+let lastWidth = window.innerWidth;
+window.addEventListener('resize', () => { if (window.innerWidth !== lastWidth) { lastWidth = window.innerWidth; showTab(tab); } });
 showTab(tab);
 
 // ---------- logs: a button at the top right opens them ----------
 $('logs-btn').addEventListener('click', () => { renderLog(); $('log-dialog').showModal(); });
 $('log-close').addEventListener('click', () => $('log-dialog').close());
 $('log-dialog').addEventListener('click', (e) => { if (e.target === $('log-dialog')) $('log-dialog').close(); });   // tap outside to close
+
+// ---------- staying up to date ----------
+// A phone keeps an installed app in memory for days, so it can go on running an old version after a deploy.
+// Each time the app comes back into view, compare versions with the server and reload once if it has moved on.
+async function updateIfStale() {
+  try {
+    const { build } = await (await fetch('/api/status')).json();
+    if (!build || build === APP_BUILD || APP_BUILD === 'dev') return;
+    if (sessionStorage.getItem('mybuses.reloadedFor') === build) return;   // already tried for this version: never loop
+    sessionStorage.setItem('mybuses.reloadedFor', build);
+    if (document.activeElement && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) return;   // not while typing
+    location.reload();
+  } catch {}
+}
 
 // ---------- boot ----------
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
@@ -694,4 +712,4 @@ initTrips();
 renderLog();
 refreshAll();
 setInterval(refreshAll, REFRESH_MS);
-document.addEventListener('visibilitychange', () => { if (!document.hidden) { refreshAll(); refreshFixQuietly(); schedulePushSync(); renderLog(); } });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { updateIfStale(); refreshAll(); refreshFixQuietly(); schedulePushSync(); renderLog(); } });
