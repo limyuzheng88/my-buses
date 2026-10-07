@@ -15,16 +15,17 @@
   </header>
 
   <main>
-    <h2 class="feature">Bus arrival notifier</h2>
-    <section id="stops" aria-label="Bookmarked stops"></section>
-
-    <section class="add">
-      <label for="q">Add a stop</label>
-      <input id="q" type="search" inputmode="search" placeholder="Stop name or 5-digit code" autocomplete="off">
-      <ul id="results"></ul>
+    <section class="panel">
+      <h2>Bus arrival notifier</h2>
+      <div id="stops" aria-label="Bookmarked stops"></div>
+      <div class="add">
+        <label for="q">Add a stop</label>
+        <input id="q" type="search" inputmode="search" placeholder="Stop name or 5-digit code" autocomplete="off">
+        <ul id="results"></ul>
+      </div>
     </section>
 
-    <section id="trip" class="trip" hidden>
+    <section id="trip" class="panel trip" hidden>
       <h2>Trip departure notifier</h2>
       <div id="cal"></div>
       <label for="trip-from">From</label>
@@ -44,15 +45,15 @@
       <div id="trip-out" aria-live="polite"></div>
     </section>
 
-    <h2 class="feature">Notifications</h2>
-    <section class="alerts">
+    <section class="panel alerts">
+      <h2>Notifications</h2>
       <button id="enable-alerts" type="button">Turn on notifications</button>
       <button id="test-push" type="button" class="secondary" hidden>Send a test notification</button>
       <p id="alert-note" class="note">Notifications arrive whether the app is open or closed, and only at the times you set.</p>
     </section>
-    <section class="log">
+    <section class="panel log">
       <details id="log-box">
-        <summary><h2 class="feature">Notification log</h2></summary>
+        <summary><h2>Notification log</h2></summary>
         <div id="log-out"></div>
       </details>
     </section>
