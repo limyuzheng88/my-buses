@@ -107,7 +107,7 @@ function stopCard(stop) {
       h('button', { class: 'icon-btn', title: 'Choose services', 'aria-label': 'Choose services to follow', onclick: () => { isEditing ? editing.delete(stop.code) : editing.add(stop.code); render(); } }, isEditing ? '✓' : '⚙'),
       h('button', { class: 'icon-btn', title: 'Remove stop', 'aria-label': 'Remove stop', onclick: () => removeStop(stop.code) }, '✕')));
 
-  const card = h('article', { class: 'stop' }, head);
+  const card = h('article', { class: 'stop', 'data-code': stop.code }, head);
 
   if (!data) { card.append(h('div', { class: 'empty' }, 'Loading…')); return card; }
   if (data.error && !data.prev) { card.append(h('div', { class: 'empty' }, `Couldn't load arrivals (${data.error}). Retrying…`)); return card; }
@@ -281,6 +281,18 @@ async function addStop(s) {
     await fetchStop(s.code);
   }
   q.value = ''; results.replaceChildren(); render();
+  reveal(document.querySelector(`.stop[data-code="${s.code}"]`));
+}
+
+// Scroll smoothly so an element that just appeared or changed sits right under the fixed top bar.
+function reveal(el) {
+  if (!el) return;
+  fitHeight();   // the page strip must already be as tall as its new content
+  requestAnimationFrame(() => {
+    const top = document.querySelector('.top').offsetHeight + 10;
+    const y = Math.max(0, el.getBoundingClientRect().top + window.scrollY - top);
+    window.scrollTo({ top: y, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  });
 }
 
 // Replace the placeholder name of the seeded stop once the stop list is available
@@ -471,6 +483,7 @@ async function planTrip(arriveTs = null) {
     await scheduleDeparture();
   } catch (e) { tripMsg = e.message; }
   btn.disabled = false; renderTripOut(); renderDeparture();
+  reveal($('trip-alert').childElementCount ? $('trip-alert') : $('trip-out'));   // bring the departure notification and the route into view
 }
 
 // Ask the server to notify this phone before the planned trip's departure. Works with the app open or closed.
@@ -523,6 +536,10 @@ async function initTrips() {
     if (!s.trips) return;
     tripsReady = true; showTab(tab);
     $('trip-to').addEventListener('input', onPlaceSearch);
+    // The time box belongs to "Arrive by": it shows only while that is chosen.
+    const syncWhen = () => { const arrive = document.querySelector('input[name="trip-when"]:checked').value === 'arrive'; $('trip-time').hidden = !arrive; };
+    for (const r of document.querySelectorAll('input[name="trip-when"]')) r.addEventListener('change', () => { syncWhen(); if (!$('trip-time').hidden && !$('trip-time').value) $('trip-time').focus(); });
+    syncWhen();
     $('trip-go').addEventListener('click', async () => { await ensurePush(); planTrip(); });
     renderTripInputs();
     if (s.calendar) { loadCalendar(); refreshFixQuietly(); }

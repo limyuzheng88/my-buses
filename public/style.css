@@ -138,3 +138,4 @@ dialog.log::backdrop { background: rgba(2, 6, 23, .7); }
 .alarm-line .alarm-edit { grid-column: 2; grid-row: 1 / span 2; color: var(--accent); font-size: 13px; }
 .alarm-line.running { border-color: var(--good); }
 .alarm-line.running .alarm-state { color: var(--good); }
+.arrive-by { display: inline-flex; align-items: center; gap: 8px; }

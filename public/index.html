@@ -46,8 +46,8 @@
       <div id="trip-places" class="chips"></div>
       <div class="window-row">
         <label><input type="radio" name="trip-when" value="now" checked> Leave now</label>
-        <label><input type="radio" name="trip-when" value="arrive"> Arrive by</label>
-        <input id="trip-time" type="time" aria-label="Arrive by time">
+        <span class="arrive-by"><label><input type="radio" name="trip-when" value="arrive"> Arrive by</label>
+        <input id="trip-time" type="time" aria-label="Arrive by time" hidden></span>
       </div>
       <button id="trip-go" type="button">Find public transport route</button>
       <div id="trip-alert" aria-live="polite"></div>
