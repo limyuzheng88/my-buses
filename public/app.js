@@ -70,8 +70,7 @@ async function fetchStop(code) {
 async function refreshAll() {
   await Promise.all(state.stops.map((s) => fetchStop(s.code)));
   lastRefresh = new Date();
-  const el = document.activeElement;
-  if (!(el && el.tagName === 'INPUT' && el.closest('#stops'))) render();   // don't rebuild a card while it is being edited
+  renderQuietly();
   nudgeDeparture();
 }
 
@@ -88,9 +87,38 @@ async function nudgeDeparture() {
 }
 
 // ---------- render ----------
+// Redraw one part of the page without the screen jumping. Replacing the element that has focus (the button just tapped)
+// makes the browser throw the page back to the top, so let go of focus first, then put the scroll position back.
+function swap(node, ...kids) {
+  const y = window.scrollY, a = document.activeElement;
+  if (a && a !== document.body && node.contains(a)) a.blur();
+  node.replaceChildren(...kids);
+  try { fitHeight(); } catch {}   // the page strip must match its new content before the position is restored
+  if (Math.abs(window.scrollY - y) > 1) window.scrollTo({ top: y, behavior: 'instant' });
+}
+// Scroll the least amount needed, smoothly, so an element is fully on screen below the top bar (or its top is, if it is taller than the screen).
+function keepInView(el) {
+  if (!el) return;
+  requestAnimationFrame(() => {
+    const r = el.getBoundingClientRect(), top = document.querySelector('.top').offsetHeight + 10, bottom = window.innerHeight - 16;
+    const dy = r.top < top ? r.top - top : r.bottom > bottom ? Math.min(r.bottom - bottom, r.top - top) : 0;
+    if (Math.abs(dy) > 2) window.scrollBy({ top: dy, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  });
+}
+const alarmEl = (key) => document.querySelector(`[data-alarm="${key}"]`);
+// Redraw the stops for a background reason (fresh bus times, an answer from the server). Never while a field in a stop is being
+// filled in, because that would close the time or date picker under the user's finger; it catches up when they leave the field.
+let renderWaiting = false;
+function renderQuietly() {
+  const el = document.activeElement;
+  if (el && /^(INPUT|SELECT)$/.test(el.tagName) && el.closest('#stops')) { renderWaiting = true; return; }
+  renderWaiting = false; render();
+}
+document.addEventListener('focusout', () => { if (renderWaiting) setTimeout(() => { if (renderWaiting) renderQuietly(); }, 300); });
+
 function render() {
   const root = document.getElementById('stops');
-  root.replaceChildren(...(state.stops.length ? state.stops.map(stopCard) : [h('p', { class: 'note' }, 'No stops yet. Search below to add one.')]));
+  swap(root, ...(state.stops.length ? state.stops.map(stopCard) : [h('p', { class: 'note' }, 'No stops yet. Search below to add one.')]));
   const st = document.getElementById('status');
   const mock = Object.values(arrivals).some((a) => a.mock);
   st.textContent = lastRefresh ? `${mock ? 'DEMO data · ' : ''}Updated ${lastRefresh.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : 'Loading…';
@@ -164,12 +192,13 @@ function alarmsSection(stop) {
   if (ask) box.append(ask);
   if (!(stop.followed || []).length) box.append(h('div', { class: 'note' }, 'Tap ⚙ and follow at least one bus first.'));
   stop.alarms.forEach((al, idx) => box.append(alarmEditor(stop, al, idx, changed)));
-  box.append(h('button', { class: 'secondary small', type: 'button', onclick: () => { const al = newAlarm(); stop.alarms.push(al); openAlarms.add(`${stop.code}|${al.id}`); changed(); ensurePush(); } }, '+ Add an alert time'));
+  box.append(h('button', { class: 'secondary small', type: 'button', onclick: () => { const al = newAlarm(); stop.alarms.push(al); openAlarms.add(`${stop.code}|${al.id}`); changed(); keepInView(alarmEl(`${stop.code}|${al.id}`)); ensurePush(); } }, '+ Add an alert time'));
   return box;
 }
 
-function alarmEditor(stop, al, idx, changed) {
+function alarmEditor(stop, al, idx, redraw) {
   const key = `${stop.code}|${al.id}`;
+  const changed = () => { redraw(); keepInView(alarmEl(key)); };   // the editor can grow as it is filled in; keep all of it on screen
   const w = alarmWindow(al);
   const stoppedUntil = serverMuted[key] > Date.now() ? serverMuted[key] : null;
 
@@ -200,11 +229,11 @@ function alarmEditor(stop, al, idx, changed) {
   // Closed: one line saying when it runs. Tap it to edit.
   if (!openAlarms.has(key)) {
     const short = !hasWhen || al.from === al.to ? status : stoppedUntil ? `Stopped until ${clock(stoppedUntil)}` : w.active && pushSub ? `Running now until ${clock(w.end)}` : '';
-    return h('button', { type: 'button', class: `alarm alarm-line${w.active && pushSub && !stoppedUntil ? ' running' : ''}`, 'aria-expanded': 'false', onclick: () => { openAlarms.add(key); render(); } },
+    return h('button', { type: 'button', class: `alarm alarm-line${w.active && pushSub && !stoppedUntil ? ' running' : ''}`, 'aria-expanded': 'false', 'data-alarm': key, onclick: () => { openAlarms.add(key); render(); keepInView(alarmEl(key)); } },
       h('span', { class: 'alarm-when' }, alarmSummary(al)), short ? h('span', { class: 'alarm-state' }, short) : null, h('span', { class: 'alarm-edit' }, 'Edit'));
   }
-  buttons.append(h('button', { type: 'button', class: 'link', onclick: () => { openAlarms.delete(key); render(); } }, 'Done'));
-  return h('div', { class: 'alarm' },
+  buttons.append(h('button', { type: 'button', class: 'link', onclick: () => { openAlarms.delete(key); render(); keepInView(alarmEl(key)); } }, 'Done'));
+  return h('div', { class: 'alarm', 'data-alarm': key },
     days, dates,
     h('div', { class: 'window-row' }, 'from', time('from', 'Start time'), 'to', time('to', 'End time'), 'every', every, 'min'),
     h('div', { class: 'note' }, status),
@@ -251,6 +280,9 @@ function toggleFollow(stop, service, on) {
 }
 
 function removeStop(code) {
+  const stop = state.stops.find((s) => s.code === code);
+  const n = stop && stop.alarms ? stop.alarms.length : 0;   // a stop with alert times is worth a second look before it goes
+  if (n && !confirm(`Remove ${stop.name} and its ${n} alert time${n > 1 ? 's' : ''}?`)) return;
   state.stops = state.stops.filter((s) => s.code !== code);
   delete arrivals[code]; editing.delete(code); save(); render();
 }
@@ -350,7 +382,7 @@ async function initPush() {
     }
   } catch (e) { console.warn('push setup failed', e); }
   pushChecked = true;
-  render(); if ($('trip-alert')) renderDeparture(); if (cal) renderCal();
+  renderQuietly(); if ($('trip-alert')) renderDeparture(); if (cal) renderCal();
 }
 
 const pushRules = () => state.stops.map(({ code, name, followed, threshold, alarms }) => ({ code, name, followed, threshold, alarms }));
@@ -358,7 +390,7 @@ const tripSettings = () => ({ enabled: Boolean(state.alertsOn), lead: (state.tri
 async function pushSyncNow() {
   const r = await fetch('/api/push/sync', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ subscription: pushSub.toJSON(), stops: pushRules(), trip: tripSettings() }) });
   const body = await r.json().catch(() => ({}));
-  if (body.muted) { serverMuted = body.muted; render(); }
+  if (body.muted) { serverMuted = body.muted; renderQuietly(); }
   if ('plan' in body) { serverPlan = body.plan; calendarLinked = Boolean(body.calendarLinked); if (cal) renderCal(); }
   if ('manual' in body && !departureNote) { departure = body.manual; if ($('trip-alert')) renderDeparture(); }
   if (Array.isArray(body.log)) { serverLog = body.log; renderLog(); }
@@ -398,15 +430,15 @@ function renderTripInputs() {
   from.replaceChildren(h('option', { value: 'gps' }, 'My current location'), ...state.places.map((p, i) => h('option', { value: String(i) }, p.name)));
   if ([...from.options].some((o) => o.value === keep)) from.value = keep;
 
-  $('trip-places').replaceChildren(...state.places.map((p, i) => h('span', { class: 'place' },
+  swap($('trip-places'), ...state.places.map((p, i) => h('span', { class: 'place' },
     h('button', { type: 'button', class: `chip${tripTo && tripTo.lat === p.lat && tripTo.lng === p.lng ? ' on' : ''}`, onclick: () => { tripTo = p; renderTripInputs(); } }, p.name),
     h('button', { type: 'button', class: 'icon-btn small', title: `Forget ${p.name}`, 'aria-label': `Forget ${p.name}`, onclick: () => { state.places.splice(i, 1); save(); renderTripInputs(); if (cal) renderCal(); } }, '✕'))));
 
   const chosen = $('trip-chosen');
-  if (!tripTo) return chosen.replaceChildren();
+  if (!tripTo) return swap(chosen);
   const isSaved = state.places.some((p) => p.lat === tripTo.lat && p.lng === tripTo.lng);
   const nameBox = h('input', { type: 'text', maxlength: 24, placeholder: 'Name, e.g. Home', 'aria-label': 'Name for this place' });
-  chosen.replaceChildren(...[
+  swap(chosen, ...[
     h('div', { class: 'note' }, `Going to: ${tripTo.name}${tripTo.address && tripTo.address !== tripTo.name ? `, ${tripTo.address}` : ''}`),
     isSaved ? null : h('div', { class: 'window-row' }, nameBox, h('button', { type: 'button', class: 'link', onclick: () => {
       const name = nameBox.value.trim();
@@ -435,9 +467,9 @@ function onPlaceSearch() {
 
 function renderTripOut() {
   const out = $('trip-out');
-  if (tripMsg) return out.replaceChildren(h('p', { class: 'note' }, tripMsg));
-  if (!tripPlan) return out.replaceChildren();
-  if (!tripPlan.options.length) return out.replaceChildren(h('p', { class: 'note' }, 'No public transport route found for that trip.'));
+  if (tripMsg) return swap(out, h('p', { class: 'note' }, tripMsg));
+  if (!tripPlan) return swap(out);
+  if (!tripPlan.options.length) return swap(out, h('p', { class: 'note' }, 'No public transport route found for that trip.'));
   const kids = [];
   if (tripFor) kids.push(h('p', { class: 'note' }, `For: ${tripFor.title}, ${whenLabel(tripFor.start)}`));
   if (tripPlan.arriveBy && !tripPlan.onTime) kids.push(h('p', { class: 'note' }, `Nothing gets there by ${clock(tripPlan.arriveBy)}. These are the closest.`));
@@ -454,7 +486,7 @@ function renderTripOut() {
       o.live ? h('div', { class: 'live' }, `Live: Bus ${o.live.service} reaches stop ${o.live.stop} at ${clock(o.live.eta)} (in ${Math.max(0, Math.floor((o.live.eta - Date.now()) / 60_000))} min)`) : null,
       h('ol', { class: 'steps' }, steps)));
   });
-  out.replaceChildren(...kids);
+  swap(out, ...kids);
 }
 
 // arriveTs is set when routing to a calendar event; otherwise the Leave now / Arrive by choice is used.
@@ -513,16 +545,16 @@ async function scheduleDeparture() {
 
 function renderDeparture() {
   const box = $('trip-alert');
-  if (departureNote) return box.replaceChildren(h('div', { class: 'note' }, departureNote));
+  if (departureNote) return swap(box, h('div', { class: 'note' }, departureNote));
   const o = tripPlan && tripPlan.options[0];
-  if (!pushSub && o && o.leaveAt - Date.now() >= 60_000) { const ask = pushPrompt('you will not be told when to leave'); return box.replaceChildren(...(ask ? [ask] : [])); }
-  if (!departure || departure.leaveAt < Date.now()) return box.replaceChildren();
+  if (!pushSub && o && o.leaveAt - Date.now() >= 60_000) { const ask = pushPrompt('you will not be told when to leave'); return swap(box, ...(ask ? [ask] : [])); }
+  if (!departure || departure.leaveAt < Date.now()) return swap(box);
   const lead = h('input', { type: 'number', min: 1, max: 60, value: departure.lead, 'aria-label': 'Minutes of warning before leaving', onchange: async (e) => {
     state.trip.lead = Math.min(60, Math.max(1, Math.round(Number(e.target.value)) || 10)); save();
     try { const r = await setDeparture({ ...departure, arriveBy: departure.start, lead: state.trip.lead }); departure = r.manual ? { ...r.manual, sentNow: r.sentNow } : null; } catch {}
     renderDeparture(); if (cal) renderCal();
   } });
-  box.replaceChildren(h('div', { class: 'depart' },
+  swap(box, h('div', { class: 'depart' },
     h('div', { class: 'depart-title' }, `Departure notification: ${departure.title}`),
     h('div', { class: 'window-row' },
       departure.sent ? `Sent. Leave at ${clock(departure.leaveAt)}.` : `Leave at ${clock(departure.leaveAt)}. You will be notified at ${clock(departure.alertAt)},`,
@@ -559,18 +591,18 @@ async function loadCalendar() {
 
 function renderCal(flag, reason) {
   const box = $('cal');
-  if (!cal) return box.replaceChildren();
+  if (!cal) return swap(box);
   if (!cal.signedIn) {
     const why = flag === 'denied' ? 'Google sign-in was cancelled.' : flag === 'failed' ? `Google sign-in did not complete${reason ? `: ${reason}` : '. Try again.'}`
       : cal.reason === 'expired' ? 'Your Google sign-in has expired. Connect again.' : 'See your next appointment here and get a route to it.';
-    return box.replaceChildren(h('div', { class: 'cal' }, h('div', { class: 'note' }, why), h('a', { class: 'btn-link', href: '/api/google/login' }, 'Connect Google Calendar')));
+    return swap(box, h('div', { class: 'cal' }, h('div', { class: 'note' }, why), h('a', { class: 'btn-link', href: '/api/google/login' }, 'Connect Google Calendar')));
   }
   const rows = cal.events.length
     ? cal.events.map((ev) => h('div', { class: 'cal-ev' },
       h('div', {}, h('div', { class: 'cal-title' }, ev.title), h('div', { class: 'note' }, `${whenLabel(ev.start)}${ev.location ? ` · ${ev.location}` : ' · no location set'}`)),
       ev.location ? h('button', { type: 'button', class: 'link', onclick: () => routeToEvent(ev) }, 'Route') : null))
     : [h('div', { class: 'note' }, 'No appointments in the next 7 days.')];
-  box.replaceChildren(h('div', { class: 'cal' },
+  swap(box, h('div', { class: 'cal' },
     h('div', { class: 'cal-head' }, h('span', {}, 'Next appointments'), h('button', { type: 'button', class: 'link', onclick: disconnectCalendar }, 'Disconnect')),
     ...rows, leaveAlertSettings()));
 }
@@ -646,7 +678,7 @@ async function renderLog() {
   const schedLine = !sched ? null
     : sched.lastRun == null ? 'Cloudflare schedule: no run recorded yet (recorded every 10 minutes). If this stays, the Cron Trigger is missing.'
       : `Cloudflare schedule: last recorded run ${sched.lastRun} (${sched.minutesAgo} min ago)${sched.healthy ? '' : '. It should run every minute, so it looks stopped: check the Cron Trigger in Cloudflare.'}${sched.lastError ? ` Last error: ${sched.lastError}.` : ''}`;
-  out.replaceChildren(...[
+  swap(out, ...[
     h('div', { class: 'note' }, `App version: ${APP_BUILD}`, serverBuild && serverBuild !== APP_BUILD ? h('button', { type: 'button', class: 'link', onclick: () => location.reload() }, ' Update available: tap to reload') : null),
     schedLine ? h('div', { class: 'note' }, schedLine) : null,
     h('div', { class: 'log-head' }, h('span', {}, `Received on this phone, past week (${got.length})`), got.length ? h('button', { type: 'button', class: 'link', onclick: async () => { try { await caches.delete('mb-log'); } catch {} renderLog(); } }, 'Clear') : null),
