@@ -1,6 +1,6 @@
 # My Buses
 
-A phone-friendly web app for Singapore bus commuters, running free on Cloudflare Workers.
+A phone-friendly web app for Singapore bus commuters, running free on Cloudflare Workers. 
 
 - **Bus arrival notifier.** Live arrival times for bookmarked stops (LTA DataMall), with notifications at the days and times you choose.
 - **Trip departure notifier.** Plans a public transport route (OneMap) and notifies you before you need to leave, for routes you plan and for Google Calendar appointments.
