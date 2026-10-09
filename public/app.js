@@ -692,7 +692,7 @@ async function renderLog() {
 // tap one to see its name, then "Add this stop". The map library (Leaflet) is fetched only the first time the map opens.
 const SG_CENTRE = [1.3521, 103.8198];
 const SHOW_STOPS_FROM_ZOOM = 16;   // below this, stops would be too dense to tap
-let leafletReady = null, stopMap = null, stopLayer = null, youLayer = null, placeLayer = null, mapTimer = null, mapPicked = null, mapSearchTimer = null;
+let leafletReady = null, stopMap = null, stopRenderer = null, stopLayer = null, youLayer = null, placeLayer = null, mapTimer = null, mapPicked = null, mapSearchTimer = null;
 function loadLeaflet() {
   if (window.L) return Promise.resolve();
   if (leafletReady) return leafletReady;
@@ -724,7 +724,9 @@ async function loadMapStops() {
     stopLayer.clearLayers();
     for (const st of r.stops || []) {
       const mine = state.stops.some((x) => x.code === st.code), picked = mapPicked && mapPicked.code === st.code;
-      L.circleMarker([st.lat, st.lng], { radius: picked ? 11 : 8, weight: 2, color: '#0f172a', fillOpacity: 1, fillColor: picked ? '#fbbf24' : mine ? '#4ade80' : '#38bdf8' })
+      // bubblingMouseEvents: false stops the tap from also reaching the map, whose own tap handler would clear the choice at once.
+      // The renderer's tolerance makes each dot accept taps a little outside its edge, so a fingertip finds it easily.
+      L.circleMarker([st.lat, st.lng], { renderer: stopRenderer, bubblingMouseEvents: false, radius: picked ? 11 : 8, weight: 2, color: '#0f172a', fillOpacity: 1, fillColor: picked ? '#fbbf24' : mine ? '#4ade80' : '#38bdf8' })
         .on('click', () => { mapPicked = st; mapPickPanel(); loadMapStops(); })
         .addTo(stopLayer);
     }
@@ -748,6 +750,7 @@ async function openStopMap() {
     stopMap = L.map('map', { zoomControl: false, maxBounds: [[1.13, 103.55], [1.50, 104.15]], minZoom: 11, maxZoom: 19 });
     L.tileLayer('https://www.onemap.gov.sg/maps/tiles/Default/{z}/{x}/{y}.png', { maxZoom: 19, detectRetina: true,
       attribution: '<a href="https://www.onemap.gov.sg/" target="_blank" rel="noopener">OneMap</a> © contributors | <a href="https://www.sla.gov.sg/" target="_blank" rel="noopener">Singapore Land Authority</a>' }).addTo(stopMap);
+    stopRenderer = L.canvas({ padding: 0.5, tolerance: 12 });
     placeLayer = L.layerGroup().addTo(stopMap); stopLayer = L.layerGroup().addTo(stopMap); youLayer = L.layerGroup().addTo(stopMap);
     stopMap.on('moveend', () => {
       clearTimeout(mapTimer); mapTimer = setTimeout(loadMapStops, 200);
