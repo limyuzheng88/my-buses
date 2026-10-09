@@ -136,4 +136,13 @@ ok('wording when no bus is within the leave-now minutes, and for buses with no e
 
 respond = 410; received.length = 0; await call('/api/push/run?force=1');
 ok('410 removes the device', phones().length === 0);
+
+// --- stops on the map: only those inside the area asked for, with their position
+{ const [st, r] = await call('/api/stops/area?box=1.296,103.852,1.298,103.854');
+  ok('map area returns the stops inside it, with coordinates', st === 200 && r.total === 1 && r.stops[0].code === '01012' && r.stops[0].lat === 1.29685 && r.stops[0].lng === 103.85254, JSON.stringify(r));
+  const [st2, r2] = await call('/api/stops/area?box=1.29,103.85,1.31,103.86');
+  ok('a bigger area returns both stops', st2 === 200 && r2.total === 2, JSON.stringify(r2));
+  ok('a malformed area is refused', (await call('/api/stops/area?box=north,pole'))[0] === 400 && (await call('/api/stops/area?box=1.3,103.9,1.2,103.8'))[0] === 400);
+  const [, r3] = await call('/api/stops?q=bugis');
+  ok('name search still works with the extra fields', r3.stops.length === 1 && r3.stops[0].code === '83139' && !('lat' in r3.stops[0]), JSON.stringify(r3)); }
 srv.close();

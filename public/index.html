@@ -29,7 +29,10 @@
       <div id="stops" aria-label="Bookmarked stops"></div>
       <div class="add">
         <label for="q">Add a stop</label>
-        <input id="q" type="search" inputmode="search" placeholder="Stop name or 5-digit code" autocomplete="off">
+        <div class="add-row">
+          <input id="q" type="search" inputmode="search" placeholder="Stop name or 5-digit code" autocomplete="off">
+          <button id="map-open" type="button" class="map-btn" aria-label="Pick a stop on the map">Map</button>
+        </div>
         <ul id="results"></ul>
       </div>
     </section>
@@ -55,6 +58,18 @@
     </section>
    </div>
   </main>
+
+  <dialog id="map-dialog" class="map-dialog" aria-labelledby="map-title">
+    <div class="map-top">
+      <h2 id="map-title">Pick a stop</h2>
+      <button id="map-close" type="button" class="link">Close</button>
+    </div>
+    <div class="map-wrap">
+      <div id="map" aria-label="Map of bus stops"></div>
+      <button id="map-locate" type="button" class="map-locate" aria-label="Go to my location">◎</button>
+    </div>
+    <div id="map-pick" class="map-pick" aria-live="polite"></div>
+  </dialog>
 
   <dialog id="log-dialog" class="log" aria-labelledby="log-title">
     <div class="log-top">
