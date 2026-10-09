@@ -692,7 +692,7 @@ async function renderLog() {
 // tap one to see its name, then "Add this stop". The map library (Leaflet) is fetched only the first time the map opens.
 const SG_CENTRE = [1.3521, 103.8198];
 const SHOW_STOPS_FROM_ZOOM = 16;   // below this, stops would be too dense to tap
-let leafletReady = null, stopMap = null, stopLayer = null, youLayer = null, mapTimer = null, mapPicked = null;
+let leafletReady = null, stopMap = null, stopLayer = null, youLayer = null, placeLayer = null, mapTimer = null, mapPicked = null, mapSearchTimer = null;
 function loadLeaflet() {
   if (window.L) return Promise.resolve();
   if (leafletReady) return leafletReady;
@@ -737,7 +737,7 @@ function showYou(fix) {
 }
 async function openStopMap() {
   const dlg = $('map-dialog');
-  mapPicked = null;
+  mapPicked = null; $('map-q').value = ''; showMapResults([]); if (placeLayer) placeLayer.clearLayers();
   dlg.showModal();
   if (!stopMap) $('map-pick').replaceChildren(h('p', { class: 'note' }, 'Loading the map…'));
   try { await loadLeaflet(); } catch (e) { return $('map-pick').replaceChildren(h('p', { class: 'note' }, e.message)); }
@@ -748,7 +748,7 @@ async function openStopMap() {
     stopMap = L.map('map', { zoomControl: false, maxBounds: [[1.13, 103.55], [1.50, 104.15]], minZoom: 11, maxZoom: 19 });
     L.tileLayer('https://www.onemap.gov.sg/maps/tiles/Default/{z}/{x}/{y}.png', { maxZoom: 19, detectRetina: true,
       attribution: '<a href="https://www.onemap.gov.sg/" target="_blank" rel="noopener">OneMap</a> © contributors | <a href="https://www.sla.gov.sg/" target="_blank" rel="noopener">Singapore Land Authority</a>' }).addTo(stopMap);
-    stopLayer = L.layerGroup().addTo(stopMap); youLayer = L.layerGroup().addTo(stopMap);
+    placeLayer = L.layerGroup().addTo(stopMap); stopLayer = L.layerGroup().addTo(stopMap); youLayer = L.layerGroup().addTo(stopMap);
     stopMap.on('moveend', () => {
       clearTimeout(mapTimer); mapTimer = setTimeout(loadMapStops, 200);
       const c = stopMap.getCenter(); try { localStorage.setItem('mybuses.mapView', JSON.stringify({ lat: c.lat, lng: c.lng, z: stopMap.getZoom() })); } catch {}
@@ -763,6 +763,35 @@ async function openStopMap() {
 }
 $('map-open').addEventListener('click', openStopMap);
 $('map-close').addEventListener('click', () => $('map-dialog').close());
+// Go to an address: search OneMap (the same search trip planning uses), then centre the map there at street level.
+const mapResults = $('map-results');
+function showMapResults(items) { mapResults.hidden = !items.length; mapResults.replaceChildren(...items); }
+function goToPlace(p) {
+  showMapResults([]); $('map-q').value = p.name; $('map-q').blur();   // blur closes the phone keyboard so the map has the room
+  if (!stopMap) return;
+  placeLayer.clearLayers();
+  L.circleMarker([p.lat, p.lng], { radius: 10, weight: 3, color: '#fff', fillColor: '#f87171', fillOpacity: 1, interactive: false }).addTo(placeLayer);
+  mapPicked = null;
+  stopMap.setView([p.lat, p.lng], 17);
+}
+$('map-q').addEventListener('input', () => {
+  clearTimeout(mapSearchTimer);
+  mapSearchTimer = setTimeout(async () => {
+    const term = $('map-q').value.trim();
+    if (term.length < 2) return showMapResults([]);
+    try {
+      const r = await fetch(`/api/places?q=${encodeURIComponent(term)}`);
+      const body = await r.json();
+      if (!r.ok) throw new Error(r.status === 404 || r.status === 503 ? 'Address search is not set up on this server.' : body.detail || body.error || `HTTP ${r.status}`);
+      if ($('map-q').value.trim() !== term) return;   // a newer search has started
+      showMapResults(body.places.length
+        ? body.places.map((p) => h('li', {}, h('button', { type: 'button', onclick: () => goToPlace(p) }, `${p.name} `, h('small', {}, p.address && p.address !== p.name ? `· ${p.address}` : ''))))
+        : [h('li', { class: 'note' }, 'No matching places. Check the spelling, or try the postal code.')]);
+    } catch (e) { showMapResults([h('li', { class: 'note' }, `Search failed: ${e.message}`)]); }
+  }, 300);
+});
+$('map-q').addEventListener('keydown', (e) => { if (e.key === 'Enter') { const first = mapResults.querySelector('button'); if (first) first.click(); } });
+$('map-q').addEventListener('search', () => { if (!$('map-q').value) showMapResults([]); });   // the box's own clear (✕) button
 $('map-locate').addEventListener('click', async () => {
   if (!stopMap) return;
   try { const fix = await getFix(); stopMap.setView([fix.lat, fix.lng], 17); showYou(fix); }

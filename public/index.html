@@ -64,7 +64,11 @@
       <h2 id="map-title">Pick a stop</h2>
       <button id="map-close" type="button" class="link">Close</button>
     </div>
+    <div class="map-search">
+      <input id="map-q" type="search" inputmode="search" enterkeyhint="search" placeholder="Go to an address, place or postal code" autocomplete="off" aria-label="Go to an address, place or postal code">
+    </div>
     <div class="map-wrap">
+      <ul id="map-results" class="map-results" hidden></ul>
       <div id="map" aria-label="Map of bus stops"></div>
       <button id="map-locate" type="button" class="map-locate" aria-label="Go to my location">◎</button>
     </div>
