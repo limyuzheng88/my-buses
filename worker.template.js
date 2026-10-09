@@ -3,7 +3,7 @@
 // The LTA key is read from the Worker secret LTA_ACCOUNT_KEY and never reaches the browser.
 
 const ASSETS = /*__ASSETS__*/{};   // "/path" -> { type, body }  (the files from public/)
-const STOPS = /*__STOPS__*/[];     // [code, name, road] for every bus stop
+const STOPS = /*__STOPS__*/[];     // [code, name, road, lat, lng] for every bus stop
 const BUILD = /*__BUILD__*/'dev';     // set by the build; shown at /api/status so you can tell which version is live
 
 const LTA_DEFAULT = 'https://datamall2.mytransport.sg/ltaodataservice';
@@ -80,6 +80,14 @@ function searchStops(q) {
     .sort((a, b) => Number(b[0].startsWith(s)) - Number(a[0].startsWith(s)) || a[1].localeCompare(b[1]))
     .slice(0, 15)
     .map(([code, name, road]) => ({ code, name, road }));
+}
+
+// Stops inside a map area (south, west, north, east), for picking a stop on the map. Capped so a zoomed-out map stays light.
+function stopsInArea(box) {
+  const [s, w, n, e] = String(box || '').split(',').map(Number);
+  if (![s, w, n, e].every(Number.isFinite) || s >= n || w >= e) return null;
+  const inside = STOPS.filter((x) => x[3] >= s && x[3] <= n && x[4] >= w && x[4] <= e);
+  return { total: inside.length, stops: inside.slice(0, 400).map(([code, name, road, lat, lng]) => ({ code, name, road, lat, lng })) };
 }
 
 // Lets you check which key a deployment holds without revealing it: its length and a short fingerprint.
@@ -912,6 +920,7 @@ export default {
         return json(200, await getArrivals(env, stop));
       }
       if (url.pathname === '/api/stops') return json(200, { stops: searchStops(url.searchParams.get('q') || '') });
+      if (url.pathname === '/api/stops/area') { const r = stopsInArea(url.searchParams.get('box')); return r ? json(200, r) : json(400, { error: 'box must be south,west,north,east' }); }
       if (url.pathname === '/api/status') return json(200, { mock: false, hosted: true, build: BUILD, stops: STOPS.length, push: pushReady(env), trips: tripsReady(env), calendar: googleReady(env), scheduler: await schedulerStatus(env), ...(await keyInfo(env)) });
 
       const asset = ASSETS[url.pathname === '/' ? '/index.html' : url.pathname];

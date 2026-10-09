@@ -687,6 +687,88 @@ async function renderLog() {
     serverLog.length ? h('ul', { class: 'log-list' }, serverLog.filter((e) => e.t > Date.now() - 7 * DAY).map((e) => row(e, `${e.title} (${e.kind}; ${e.status >= 200 && e.status < 300 ? 'accepted for delivery' : `failed, code ${e.status}`})`))) : h('div', { class: 'note' }, 'None yet.')].filter(Boolean));
 }
 
+// ---------- pick a stop on the map ----------
+// A full-screen map of Singapore (OneMap, the government's free map). Zoom in and every bus stop in view shows as a dot;
+// tap one to see its name, then "Add this stop". The map library (Leaflet) is fetched only the first time the map opens.
+const SG_CENTRE = [1.3521, 103.8198];
+const SHOW_STOPS_FROM_ZOOM = 16;   // below this, stops would be too dense to tap
+let leafletReady = null, stopMap = null, stopLayer = null, youLayer = null, mapTimer = null, mapPicked = null;
+function loadLeaflet() {
+  if (window.L) return Promise.resolve();
+  if (leafletReady) return leafletReady;
+  leafletReady = new Promise((resolve, reject) => {
+    const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    const js = document.createElement('script'); js.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    js.onload = () => resolve(); js.onerror = () => { leafletReady = null; reject(new Error('Could not load the map. Check your connection and try again.')); };
+    document.head.append(css, js);
+  });
+  return leafletReady;
+}
+function mapPickPanel() {
+  const box = $('map-pick');
+  if (!stopMap) return;
+  if (mapPicked) {
+    const have = state.stops.some((x) => x.code === mapPicked.code);
+    return box.replaceChildren(
+      h('div', {}, h('div', { class: 'map-pick-name' }, mapPicked.name), h('div', { class: 'map-pick-sub' }, `${mapPicked.road ? `${mapPicked.road} · ` : ''}Stop ${mapPicked.code}`)),
+      h('button', { type: 'button', class: 'add-it', disabled: have, onclick: () => { const s = mapPicked; $('map-dialog').close(); addStop(s); } }, have ? 'Already in your stops' : 'Add this stop'));
+  }
+  box.replaceChildren(h('p', { class: 'note' }, stopMap.getZoom() < SHOW_STOPS_FROM_ZOOM ? 'Zoom in to see bus stops, then tap one.' : 'Tap a bus stop to choose it.'));
+}
+async function loadMapStops() {
+  if (!stopMap) return;
+  if (stopMap.getZoom() < SHOW_STOPS_FROM_ZOOM) { stopLayer.clearLayers(); return mapPickPanel(); }
+  const b = stopMap.getBounds();
+  try {
+    const r = await (await fetch(`/api/stops/area?box=${[b.getSouth(), b.getWest(), b.getNorth(), b.getEast()].map((v) => v.toFixed(5)).join(',')}`)).json();
+    stopLayer.clearLayers();
+    for (const st of r.stops || []) {
+      const mine = state.stops.some((x) => x.code === st.code), picked = mapPicked && mapPicked.code === st.code;
+      L.circleMarker([st.lat, st.lng], { radius: picked ? 11 : 8, weight: 2, color: '#0f172a', fillOpacity: 1, fillColor: picked ? '#fbbf24' : mine ? '#4ade80' : '#38bdf8' })
+        .on('click', () => { mapPicked = st; mapPickPanel(); loadMapStops(); })
+        .addTo(stopLayer);
+    }
+  } catch { $('map-pick').replaceChildren(h('p', { class: 'note' }, 'Could not load the stops here. Move the map to try again.')); return; }
+  mapPickPanel();
+}
+function showYou(fix) {
+  youLayer.clearLayers();
+  L.circleMarker([fix.lat, fix.lng], { radius: 7, weight: 3, color: '#fff', fillColor: '#2563eb', fillOpacity: 1, interactive: false }).addTo(youLayer);
+}
+async function openStopMap() {
+  const dlg = $('map-dialog');
+  mapPicked = null;
+  dlg.showModal();
+  if (!stopMap) $('map-pick').replaceChildren(h('p', { class: 'note' }, 'Loading the map…'));
+  try { await loadLeaflet(); } catch (e) { return $('map-pick').replaceChildren(h('p', { class: 'note' }, e.message)); }
+  const recent = state.lastFix && Date.now() - state.lastFix.t < 30 * 60_000 ? state.lastFix : null;
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem('mybuses.mapView')); } catch {}
+  if (!stopMap) {
+    stopMap = L.map('map', { zoomControl: false, maxBounds: [[1.13, 103.55], [1.50, 104.15]], minZoom: 11, maxZoom: 19 });
+    L.tileLayer('https://www.onemap.gov.sg/maps/tiles/Default/{z}/{x}/{y}.png', { maxZoom: 19, detectRetina: true,
+      attribution: '<a href="https://www.onemap.gov.sg/" target="_blank" rel="noopener">OneMap</a> © contributors | <a href="https://www.sla.gov.sg/" target="_blank" rel="noopener">Singapore Land Authority</a>' }).addTo(stopMap);
+    stopLayer = L.layerGroup().addTo(stopMap); youLayer = L.layerGroup().addTo(stopMap);
+    stopMap.on('moveend', () => {
+      clearTimeout(mapTimer); mapTimer = setTimeout(loadMapStops, 200);
+      const c = stopMap.getCenter(); try { localStorage.setItem('mybuses.mapView', JSON.stringify({ lat: c.lat, lng: c.lng, z: stopMap.getZoom() })); } catch {}
+    });
+    stopMap.on('click', () => { if (mapPicked) { mapPicked = null; mapPickPanel(); loadMapStops(); } });   // tapping empty map clears the choice
+  }
+  // Start where you are if the app knows, otherwise where you last looked, otherwise all of Singapore.
+  if (recent) { stopMap.setView([recent.lat, recent.lng], 17); showYou(recent); }
+  else if (saved && saved.lat) stopMap.setView([saved.lat, saved.lng], saved.z || 16);
+  else stopMap.setView(SG_CENTRE, 12);
+  requestAnimationFrame(() => { stopMap.invalidateSize(); loadMapStops(); });
+}
+$('map-open').addEventListener('click', openStopMap);
+$('map-close').addEventListener('click', () => $('map-dialog').close());
+$('map-locate').addEventListener('click', async () => {
+  if (!stopMap) return;
+  try { const fix = await getFix(); stopMap.setView([fix.lat, fix.lng], 17); showYou(fix); }
+  catch (e) { $('map-pick').replaceChildren(h('p', { class: 'note' }, e.message)); }
+});
+
 // ---------- pages: Buses and Trips ----------
 // The two pages sit side by side in a sideways-scrolling strip that snaps to one page. Swiping drags the strip with the finger,
 // and the highlight behind the tabs moves in step with it. Tapping a tab scrolls the strip smoothly.

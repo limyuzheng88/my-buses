@@ -8,11 +8,13 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const out = path.join(root, 'stops', 'stops.json');
+// Each stop is [code, name, road, latitude, longitude]. Five decimal places is about 1 m, plenty for a map pin.
+const ll = (v) => Math.round(Number(v) * 1e5) / 1e5 || 0;
 
 let stops;
 if (process.argv.includes('--from-cache')) {
   const cached = JSON.parse(await readFile(path.join(root, 'data', 'stops.json'), 'utf8'));
-  stops = cached.stops.map((s) => [s.code, s.name, s.road || '']);
+  stops = cached.stops.map((s) => [s.code, s.name, s.road || '', ll(s.lat), ll(s.lng)]);
 } else {
   let key = process.env.LTA_ACCOUNT_KEY;
   if (!key) {
@@ -24,7 +26,7 @@ if (process.argv.includes('--from-cache')) {
     const res = await fetch(`https://datamall2.mytransport.sg/ltaodataservice/BusStops?$skip=${skip}`, { headers: { AccountKey: key.replace(/^(['"])(.*)\1$/, '$2'), accept: 'application/json' } });
     if (!res.ok) { console.error(`LTA answered ${res.status}`); process.exit(1); }
     const page = (await res.json()).value || [];
-    stops.push(...page.map((s) => [s.BusStopCode, s.Description, s.RoadName || '']));
+    stops.push(...page.map((s) => [s.BusStopCode, s.Description, s.RoadName || '', ll(s.Latitude), ll(s.Longitude)]));
     if (page.length < 500) break;
   }
 }
