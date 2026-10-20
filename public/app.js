@@ -118,7 +118,10 @@ document.addEventListener('focusout', () => { if (renderWaiting) setTimeout(() =
 
 function render() {
   const root = document.getElementById('stops');
-  swap(root, ...(state.stops.length ? state.stops.map(stopCard) : [h('p', { class: 'note' }, 'No stops yet. Search below to add one.')]));
+  swap(root, ...(state.stops.length ? state.stops.map(stopCard) : [h('div', { class: 'welcome' },
+    h('p', {}, h('b', {}, 'No stops yet.'), ' Find one on the map: tap a stop to see its buses right away, and add it if you want it here. Or type its name or 5-digit code below.'),
+    h('button', { type: 'button', class: 'add-it', onclick: () => openStopMap() }, 'Find stops on the map'))]));
+  document.getElementById('map-open-inline').hidden = !state.stops.length;   // the welcome card already offers the map when there are no stops
   const st = document.getElementById('status');
   const mock = Object.values(arrivals).some((a) => a.mock);
   st.textContent = lastRefresh ? `${mock ? 'DEMO data · ' : ''}Updated ${lastRefresh.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : 'Loading…';
@@ -717,7 +720,7 @@ function mapPickPanel() {
       h('button', { type: 'button', class: 'add-it', disabled: have, onclick: () => { const s = mapPicked; $('map-dialog').close(); addStop(s); } }, have ? 'Already in your stops' : 'Add this stop'));
   }
   stopPreview();
-  box.replaceChildren(h('p', { class: 'note' }, stopMap.getZoom() < SHOW_STOPS_FROM_ZOOM ? 'Zoom in to see bus stops, then tap one.' : 'Tap a bus stop to choose it.'));
+  box.replaceChildren(h('p', { class: 'note' }, stopMap.getZoom() < SHOW_STOPS_FROM_ZOOM ? 'Zoom in, or search above, to see bus stops.' : 'Tap a bus stop to choose it.'));
 }
 // Live arrivals for the tapped stop, drawn like a card on the Buses page, without bookmarking it. Refreshes every 20 s while shown.
 async function loadPreview(code) {
@@ -852,10 +855,20 @@ function savedFab() { try { const p = JSON.parse(localStorage.getItem(FAB_KEY));
   window.addEventListener('resize', () => { const p = savedFab(); if (p) placeFab(p); });   // rotation, keyboard: keep it on screen
 }
 $('map-close').addEventListener('click', () => $('map-dialog').close());
+$('map-open-inline').addEventListener('click', () => openStopMap());
 $('map-dialog').addEventListener('close', stopPreview);   // stop refreshing once the map is closed
 // Go to an address: search OneMap (the same search trip planning uses), then centre the map there at street level.
 const mapResults = $('map-results');
 function showMapResults(items) { mapResults.hidden = !items.length; mapResults.replaceChildren(...items); }
+// A bus stop chosen from the search: centre on it and select it, so its bus times show straight away.
+function goToStop(s) {
+  showMapResults([]); $('map-q').value = s.name; $('map-q').blur();
+  if (!stopMap) return;
+  placeLayer.clearLayers();
+  mapPicked = s;
+  stopMap.setView([s.lat, s.lng], 18);
+  mapPickPanel();
+}
 function goToPlace(p) {
   showMapResults([]); $('map-q').value = p.name; $('map-q').blur();   // blur closes the phone keyboard so the map has the room
   if (!stopMap) return;
@@ -869,15 +882,19 @@ $('map-q').addEventListener('input', () => {
   mapSearchTimer = setTimeout(async () => {
     const term = $('map-q').value.trim();
     if (term.length < 2) return showMapResults([]);
-    try {
-      const r = await fetch(`/api/places?q=${encodeURIComponent(term)}`);
-      const body = await r.json();
-      if (!r.ok) throw new Error(r.status === 404 || r.status === 503 ? 'Address search is not set up on this server.' : body.detail || body.error || `HTTP ${r.status}`);
-      if ($('map-q').value.trim() !== term) return;   // a newer search has started
-      showMapResults(body.places.length
-        ? body.places.map((p) => h('li', {}, h('button', { type: 'button', onclick: () => goToPlace(p) }, `${p.name} `, h('small', {}, p.address && p.address !== p.name ? `· ${p.address}` : ''))))
-        : [h('li', { class: 'note' }, 'No matching places. Check the spelling, or try the postal code.')]);
-    } catch (e) { showMapResults([h('li', { class: 'note' }, `Search failed: ${e.message}`)]); }
+    // Bus stops (by name or code) and places (addresses, buildings, postal codes) are searched together; stops are listed first.
+    const [stopsR, placesR] = await Promise.allSettled([
+      fetch(`/api/stops?q=${encodeURIComponent(term)}`).then((r) => r.json()),
+      fetch(`/api/places?q=${encodeURIComponent(term)}`).then(async (r) => { const b = await r.json(); if (!r.ok) throw new Error(b.detail || b.error || `HTTP ${r.status}`); return b; }),
+    ]);
+    if ($('map-q').value.trim() !== term) return;   // a newer search has started
+    const stops = stopsR.status === 'fulfilled' ? (stopsR.value.stops || []).filter((s) => s.lat).slice(0, 5) : [];
+    const places = placesR.status === 'fulfilled' ? (placesR.value.places || []).slice(0, 5) : [];
+    const items = [];
+    if (stops.length) items.push(h('li', { class: 'group' }, 'Bus stops'), ...stops.map((s) => h('li', {}, h('button', { type: 'button', onclick: () => goToStop(s) }, `${s.name} `, h('small', {}, `· ${s.road ? `${s.road} · ` : ''}${s.code}`)))));
+    if (places.length) items.push(h('li', { class: 'group' }, 'Places'), ...places.map((p) => h('li', {}, h('button', { type: 'button', onclick: () => goToPlace(p) }, `${p.name} `, h('small', {}, p.address && p.address !== p.name ? `· ${p.address}` : '')))));
+    if (!items.length) items.push(h('li', { class: 'note' }, stopsR.status === 'rejected' && placesR.status === 'rejected' ? 'Search failed. Check your connection.' : 'Nothing found. Check the spelling, or try the stop code or postal code.'));
+    showMapResults(items);
   }, 300);
 });
 $('map-q').addEventListener('keydown', (e) => { if (e.key === 'Enter') { const first = mapResults.querySelector('button'); if (first) first.click(); } });

@@ -79,7 +79,7 @@ function searchStops(q) {
     .filter((x) => x[0].startsWith(s) || x[1].toLowerCase().includes(s) || (x[2] || '').toLowerCase().includes(s))
     .sort((a, b) => Number(b[0].startsWith(s)) - Number(a[0].startsWith(s)) || a[1].localeCompare(b[1]))
     .slice(0, 15)
-    .map(([code, name, road]) => ({ code, name, road }));
+    .map(([code, name, road, lat, lng]) => ({ code, name, road, lat, lng }));
 }
 
 // Stops inside a map area (south, west, north, east), for picking a stop on the map. Capped so a zoomed-out map stays light.

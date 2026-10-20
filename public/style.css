@@ -177,3 +177,11 @@ dialog.map-dialog::backdrop { background: var(--bg); }
 .map-pick { max-height: 55dvh; overflow-y: auto; }
 .map-preview .svc:first-child, .map-preview > .empty:first-child { border-top: 1px solid var(--line); }
 .map-preview-at { font-size: 12px; color: var(--muted); padding-top: 6px; }
+/* Second way in to the map, under the stop search, so it is found even without the floating button */
+.map-inline { display: block; margin-top: 8px; font-size: 14px; }
+/* Empty Buses page: a short welcome that names both ways to add a stop */
+.welcome { background: var(--bg); border: 1px dashed var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 10px; }
+.welcome p { margin: 0; color: var(--muted); font-size: 14px; }
+.welcome b { color: var(--text); }
+.welcome .add-it { padding: 12px; font-size: 15px; font-weight: 600; background: var(--accent); color: #082f49; border: 0; border-radius: 10px; cursor: pointer; }
+.map-results .group { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 6px 2px 0; }
