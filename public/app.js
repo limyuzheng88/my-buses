@@ -749,6 +749,16 @@ function previewRows() {
   box.append(h('div', { class: 'map-preview-at' }, preview.error ? 'Showing last known times; refresh failed.' : `Updated ${new Date(preview.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} · refreshes every 20 s`));
   return box;
 }
+// Keep the chosen stop in the middle of the map. The bus-times panel below takes room from the map (more so once the times
+// arrive), so the map is told its new size first, then glides to the stop.
+function centreOnPicked() {
+  if (!stopMap || !mapPicked) return;
+  requestAnimationFrame(() => {
+    if (!mapPicked) return;
+    stopMap.invalidateSize({ pan: false });
+    stopMap.panTo([mapPicked.lat, mapPicked.lng], { animate: !window.matchMedia('(prefers-reduced-motion: reduce)').matches, duration: 0.3 });
+  });
+}
 async function loadMapStops() {
   if (!stopMap) return;
   if (stopMap.getZoom() < SHOW_STOPS_FROM_ZOOM) { stopLayer.clearLayers(); return mapPickPanel(); }
@@ -761,7 +771,7 @@ async function loadMapStops() {
       // bubblingMouseEvents: false stops the tap from also reaching the map, whose own tap handler would clear the choice at once.
       // The renderer's tolerance makes each dot accept taps a little outside its edge, so a fingertip finds it easily.
       L.circleMarker([st.lat, st.lng], { renderer: stopRenderer, bubblingMouseEvents: false, radius: picked ? 11 : 8, weight: 2, color: '#0f172a', fillOpacity: 1, fillColor: picked ? '#fbbf24' : mine ? '#4ade80' : '#38bdf8' })
-        .on('click', () => { mapPicked = st; mapPickPanel(); loadMapStops(); })
+        .on('click', () => { mapPicked = st; mapPickPanel(); loadMapStops(); centreOnPicked(); })
         .addTo(stopLayer);
     }
   } catch { $('map-pick').replaceChildren(h('p', { class: 'note' }, 'Could not load the stops here. Move the map to try again.')); return; }
@@ -791,6 +801,8 @@ async function openStopMap() {
       const c = stopMap.getCenter(); try { localStorage.setItem('mybuses.mapView', JSON.stringify({ lat: c.lat, lng: c.lng, z: stopMap.getZoom() })); } catch {}
     });
     stopMap.on('click', () => { if (mapPicked) { mapPicked = null; mapPickPanel(); loadMapStops(); } });   // tapping empty map clears the choice
+    // Whenever the map area changes size (the panel below grows or shrinks, the phone rotates), re-centre on the chosen stop.
+    if ('ResizeObserver' in window) { let lastH = 0; new ResizeObserver(() => { const hgt = $('map').offsetHeight; if (Math.abs(hgt - lastH) < 2) return; lastH = hgt; if (mapPicked) centreOnPicked(); else stopMap.invalidateSize(); }).observe($('map')); }
   }
   // Start where you are if the app knows, otherwise where you last looked, otherwise all of Singapore.
   if (recent) { stopMap.setView([recent.lat, recent.lng], 17); showYou(recent); }
@@ -868,6 +880,7 @@ function goToStop(s) {
   mapPicked = s;
   stopMap.setView([s.lat, s.lng], 18);
   mapPickPanel();
+  centreOnPicked();
 }
 function goToPlace(p) {
   showMapResults([]); $('map-q').value = p.name; $('map-q').blur();   // blur closes the phone keyboard so the map has the room
