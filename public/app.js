@@ -692,6 +692,7 @@ async function renderLog() {
 // tap one to see its name, then "Add this stop". The map library (Leaflet) is fetched only the first time the map opens.
 const SG_CENTRE = [1.3521, 103.8198];
 const SHOW_STOPS_FROM_ZOOM = 16;   // below this, stops would be too dense to tap
+let preview = null, previewTimer = null;   // live bus times for the stop tapped on the map: { code, at, data | error }
 let leafletReady = null, stopMap = null, stopRenderer = null, stopLayer = null, youLayer = null, placeLayer = null, mapTimer = null, mapPicked = null, mapSearchTimer = null;
 function loadLeaflet() {
   if (window.L) return Promise.resolve();
@@ -709,11 +710,41 @@ function mapPickPanel() {
   if (!stopMap) return;
   if (mapPicked) {
     const have = state.stops.some((x) => x.code === mapPicked.code);
+    if (!preview || preview.code !== mapPicked.code) loadPreview(mapPicked.code);
     return box.replaceChildren(
       h('div', {}, h('div', { class: 'map-pick-name' }, mapPicked.name), h('div', { class: 'map-pick-sub' }, `${mapPicked.road ? `${mapPicked.road} · ` : ''}Stop ${mapPicked.code}`)),
+      previewRows(),
       h('button', { type: 'button', class: 'add-it', disabled: have, onclick: () => { const s = mapPicked; $('map-dialog').close(); addStop(s); } }, have ? 'Already in your stops' : 'Add this stop'));
   }
+  stopPreview();
   box.replaceChildren(h('p', { class: 'note' }, stopMap.getZoom() < SHOW_STOPS_FROM_ZOOM ? 'Zoom in to see bus stops, then tap one.' : 'Tap a bus stop to choose it.'));
+}
+// Live arrivals for the tapped stop, drawn like a card on the Buses page, without bookmarking it. Refreshes every 20 s while shown.
+async function loadPreview(code) {
+  clearTimeout(previewTimer);
+  if (!preview || preview.code !== code) preview = { code };
+  try {
+    const r = await fetch(`/api/arrivals?stop=${code}`);
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+    if (preview && preview.code === code) preview = { code, at: Date.now(), data: body };
+  } catch (e) { if (preview && preview.code === code) preview = { code, at: preview.at, data: preview.data, error: e.message }; }
+  if (!mapPicked || mapPicked.code !== code || !$('map-dialog').open) return;
+  const old = $('map-pick').querySelector('.map-preview');
+  if (old) old.replaceWith(previewRows());
+  previewTimer = setTimeout(() => { if (mapPicked && mapPicked.code === code && $('map-dialog').open) loadPreview(code); }, REFRESH_MS);
+}
+function stopPreview() { clearTimeout(previewTimer); preview = null; }
+function previewRows() {
+  const box = h('div', { class: 'map-preview', 'aria-live': 'polite' });
+  if (!preview || (!preview.data && !preview.error)) { box.append(h('div', { class: 'empty' }, 'Loading bus times…')); return box; }
+  if (!preview.data) { box.append(h('div', { class: 'empty' }, `Couldn't load bus times (${preview.error}). Retrying…`)); return box; }
+  const services = preview.data.services || [];
+  if (!services.length) box.append(h('div', { class: 'empty' }, 'No service right now. Buses may not be running at this hour.'));
+  const asStop = { threshold: 10 };   // not a saved stop: highlight buses within 10 min, as a new stop would
+  for (const svc of services) box.append(serviceRow(asStop, svc, false, false));
+  box.append(h('div', { class: 'map-preview-at' }, preview.error ? 'Showing last known times; refresh failed.' : `Updated ${new Date(preview.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} · refreshes every 20 s`));
+  return box;
 }
 async function loadMapStops() {
   if (!stopMap) return;
@@ -821,6 +852,7 @@ function savedFab() { try { const p = JSON.parse(localStorage.getItem(FAB_KEY));
   window.addEventListener('resize', () => { const p = savedFab(); if (p) placeFab(p); });   // rotation, keyboard: keep it on screen
 }
 $('map-close').addEventListener('click', () => $('map-dialog').close());
+$('map-dialog').addEventListener('close', stopPreview);   // stop refreshing once the map is closed
 // Go to an address: search OneMap (the same search trip planning uses), then centre the map there at street level.
 const mapResults = $('map-results');
 function showMapResults(items) { mapResults.hidden = !items.length; mapResults.replaceChildren(...items); }
