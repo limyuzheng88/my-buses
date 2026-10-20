@@ -30,6 +30,7 @@
       <div class="add">
         <label for="q">Add a stop</label>
         <input id="q" type="search" inputmode="search" placeholder="Stop name or 5-digit code" autocomplete="off">
+        <button id="map-open-inline" type="button" class="link map-inline">or find one on the map</button>
         <ul id="results"></ul>
       </div>
     </section>
@@ -57,18 +58,18 @@
   </main>
 
   <!-- Pick a stop on the map: a floating button in the bottom corner, within easy reach of the thumb, on the Buses page -->
-  <button id="map-open" type="button" class="fab" aria-label="Pick a bus stop on the map">
+  <button id="map-open" type="button" class="fab" aria-label="Find bus stops on the map">
     <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
-    <span>Map</span>
+    <span>Find stops</span>
   </button>
 
   <dialog id="map-dialog" class="map-dialog" aria-labelledby="map-title">
     <div class="map-top">
-      <h2 id="map-title">Pick a stop</h2>
+      <h2 id="map-title">Find a stop</h2>
       <button id="map-close" type="button" class="link">Close</button>
     </div>
     <div class="map-search">
-      <input id="map-q" type="search" inputmode="search" enterkeyhint="search" placeholder="Go to an address, place or postal code" autocomplete="off" aria-label="Go to an address, place or postal code">
+      <input id="map-q" type="search" inputmode="search" enterkeyhint="search" placeholder="Stop name or code, address, postal code" autocomplete="off" aria-label="Search for a bus stop or a place">
     </div>
     <div class="map-wrap">
       <ul id="map-results" class="map-results" hidden></ul>

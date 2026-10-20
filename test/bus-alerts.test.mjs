@@ -144,5 +144,5 @@ ok('410 removes the device', phones().length === 0);
   ok('a bigger area returns both stops', st2 === 200 && r2.total === 2, JSON.stringify(r2));
   ok('a malformed area is refused', (await call('/api/stops/area?box=north,pole'))[0] === 400 && (await call('/api/stops/area?box=1.3,103.9,1.2,103.8'))[0] === 400);
   const [, r3] = await call('/api/stops?q=bugis');
-  ok('name search still works with the extra fields', r3.stops.length === 1 && r3.stops[0].code === '83139' && !('lat' in r3.stops[0]), JSON.stringify(r3)); }
+  ok('name search returns the stop with its position, for the map', r3.stops.length === 1 && r3.stops[0].code === '83139' && r3.stops[0].lat === 1.30012 && r3.stops[0].lng === 103.85561, JSON.stringify(r3)); }
 srv.close();
