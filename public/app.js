@@ -764,7 +764,62 @@ async function openStopMap() {
   else stopMap.setView(SG_CENTRE, 12);
   requestAnimationFrame(() => { stopMap.invalidateSize(); loadMapStops(); });
 }
-$('map-open').addEventListener('click', openStopMap);
+$('map-open').addEventListener('click', () => { if (fabJustDragged) { fabJustDragged = false; return; } openStopMap(); });
+
+// ---------- the floating Map button can be dragged anywhere ----------
+// Drag it and let go: it settles against the nearer side of the screen, at the height you left it, and stays there next time.
+// A short press is still a tap. With nothing saved it sits in the bottom-right corner (set in style.css).
+const FAB_KEY = 'mybuses.fabPosition', FAB_MARGIN = 16, DRAG_FROM_PX = 8;
+let fabJustDragged = false;
+function fabLimits(b) {
+  const top = document.querySelector('.top').offsetHeight + 12;   // below the fixed top bar
+  const bottom = window.innerHeight - b.offsetHeight - 20;          // above the screen's bottom edge
+  return { top, bottom: Math.max(top, bottom) };
+}
+function placeFab(pos) {   // pos: { side: 'left' | 'right', y: 0 (highest) .. 1 (lowest) }
+  const b = $('map-open'), { top, bottom } = fabLimits(b);
+  b.style.top = `${Math.round(top + Math.min(1, Math.max(0, pos.y)) * (bottom - top))}px`; b.style.bottom = 'auto';
+  // Always placed by left/top (never right/bottom) so the settle can slide smoothly from wherever it was dropped.
+  b.style.left = `${pos.side === 'left' ? FAB_MARGIN : window.innerWidth - b.offsetWidth - FAB_MARGIN}px`; b.style.right = 'auto';
+}
+function savedFab() { try { const p = JSON.parse(localStorage.getItem(FAB_KEY)); return p && (p.side === 'left' || p.side === 'right') && Number.isFinite(p.y) ? p : null; } catch { return null; } }
+{
+  const b = $('map-open');
+  let start = null, dragging = false, grabX = 0, grabY = 0;
+  b.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    const r = b.getBoundingClientRect();
+    start = { x: e.clientX, y: e.clientY }; grabX = e.clientX - r.left; grabY = e.clientY - r.top; dragging = false;
+  });
+  b.addEventListener('pointermove', (e) => {
+    if (!start) return;
+    if (!dragging) {
+      if (Math.hypot(e.clientX - start.x, e.clientY - start.y) < DRAG_FROM_PX) return;
+      dragging = true; b.setPointerCapture(e.pointerId); b.classList.add('dragging');
+    }
+    const { top, bottom } = fabLimits(b);
+    const x = Math.min(window.innerWidth - b.offsetWidth - 4, Math.max(4, e.clientX - grabX));
+    const y = Math.min(bottom, Math.max(top, e.clientY - grabY));
+    b.style.left = `${x}px`; b.style.top = `${y}px`; b.style.right = 'auto'; b.style.bottom = 'auto';
+  });
+  const end = () => {
+    if (!start) return;
+    start = null;
+    if (!dragging) return;   // it was a tap: the click handler opens the map
+    dragging = false; fabJustDragged = true; setTimeout(() => { fabJustDragged = false; }, 400);
+    const r = b.getBoundingClientRect(), { top, bottom } = fabLimits(b);
+    const pos = { side: r.left + r.width / 2 < window.innerWidth / 2 ? 'left' : 'right', y: bottom > top ? (r.top - top) / (bottom - top) : 1 };
+    b.classList.remove('dragging'); b.classList.add('settling');
+    placeFab(pos);
+    setTimeout(() => b.classList.remove('settling'), 250);
+    try { localStorage.setItem(FAB_KEY, JSON.stringify(pos)); } catch {}
+  };
+  b.addEventListener('pointerup', end);
+  b.addEventListener('pointercancel', end);
+  const saved = savedFab();
+  if (saved) placeFab(saved);
+  window.addEventListener('resize', () => { const p = savedFab(); if (p) placeFab(p); });   // rotation, keyboard: keep it on screen
+}
 $('map-close').addEventListener('click', () => $('map-dialog').close());
 // Go to an address: search OneMap (the same search trip planning uses), then centre the map there at street level.
 const mapResults = $('map-results');
@@ -818,7 +873,15 @@ function paintTabs() {
   const p = progress();
   pill.style.transform = `translateX(calc(${p.toFixed(4)} * (100% + 4px)))`;
   for (const b of document.querySelectorAll('#tabs button')) { const on = (b.dataset.tab === 'trip') === (p > 0.5); b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); }
+  // The Map button belongs to the Buses page: it fades out as you swipe to Trips, and cannot be tapped once past halfway.
+  const fab = $('map-open');
+  fab.style.opacity = String(1 - p);
+  fab.style.pointerEvents = p > 0.5 ? 'none' : '';
+  fab.tabIndex = p > 0.5 ? -1 : 0;
 }
+// While typing (the phone keyboard is up), the floating button would sit on top of the field or the keyboard; tuck it away.
+document.addEventListener('focusin', (e) => { if (e.target.matches('input, select, textarea')) $('map-open').classList.add('away'); });
+document.addEventListener('focusout', () => setTimeout(() => { if (!document.activeElement || !document.activeElement.matches('input, select, textarea')) $('map-open').classList.remove('away'); }, 50));
 // At rest the strip is exactly as tall as the page in view, so a short page has no empty space under it. While sliding, both pages show in full.
 function fitHeight() { pager.style.height = sliding ? '' : `${pages[tripsReady ? tab : 'bus'].offsetHeight}px`; }
 function settle() {
@@ -835,6 +898,7 @@ function showTab(next, smooth = false) {
   tab = next === 'trip' ? 'trip' : 'bus';
   try { localStorage.setItem('mybuses.tab', tab); } catch {}
   $('tabs').hidden = !tripsReady;
+  { const p = savedFab(); if (p) placeFab(p); }   // the top bar just changed height (tabs appear once trips are known), so re-place the Map button
   pages.trip.hidden = !tripsReady;
   const left = tripsReady && tab === 'trip' ? maxScroll() : 0;
   if (smooth && !calm.matches && Math.abs(pager.scrollLeft - left) > 1) pager.scrollTo({ left, behavior: 'smooth' });
