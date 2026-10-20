@@ -173,3 +173,7 @@ dialog.map-dialog::backdrop { background: var(--bg); }
 .map-results button { width: 100%; text-align: left; background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 15px; cursor: pointer; }
 .map-results small { color: var(--muted); }
 .map-results .note { margin: 4px 2px; }
+/* Live bus times for the stop tapped on the map: scrolls on its own so the map stays visible above it */
+.map-pick { max-height: 55dvh; overflow-y: auto; }
+.map-preview .svc:first-child, .map-preview > .empty:first-child { border-top: 1px solid var(--line); }
+.map-preview-at { font-size: 12px; color: var(--muted); padding-top: 6px; }
