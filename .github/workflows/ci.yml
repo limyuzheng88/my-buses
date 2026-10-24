@@ -1,11 +1,10 @@
-# Runs on every pull request and every push to a branch other than main.
+# Runs on every pull request, including drafts: each time the pull request is opened or new commits are pushed to it.
+# For unfinished work, open a draft pull request to get these results early; a draft cannot be merged by accident.
 # A pull request cannot be merged unless these pass (once branch protection requires "Test and build" and "Screen tests").
 name: CI
 
 on:
   pull_request:
-  push:
-    branches-ignore: [main]
 
 jobs:
   test:
