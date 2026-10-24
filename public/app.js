@@ -100,7 +100,15 @@ function swap(node, ...kids) {
 function keepInView(el) {
   if (!el) return;
   requestAnimationFrame(() => {
-    const r = el.getBoundingClientRect(), top = document.querySelector('.top').offsetHeight + 10, bottom = window.innerHeight - 16;
+    const r = el.getBoundingClientRect(), top = document.querySelector('.top').offsetHeight + 10;
+    let bottom = window.innerHeight - 16;
+    // The floating "Find stops" button covers part of the screen. If it sits in the lower half beside this element,
+    // stop the element above it, so the buttons at its bottom (like "Done") are never hidden underneath.
+    const fab = document.getElementById('map-open');
+    if (fab && getComputedStyle(fab).opacity !== '0' && !fab.classList.contains('away')) {
+      const f = fab.getBoundingClientRect();
+      if (f.top > window.innerHeight / 2 && f.left < r.right && f.right > r.left) bottom = Math.min(bottom, f.top - 10);
+    }
     const dy = r.top < top ? r.top - top : r.bottom > bottom ? Math.min(r.bottom - bottom, r.top - top) : 0;
     if (Math.abs(dy) > 2) window.scrollBy({ top: dy, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   });

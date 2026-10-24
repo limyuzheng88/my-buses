@@ -49,5 +49,17 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy
       - name: Check the live app is serving this build
+        id: smoke
         if: ${{ vars.APP_URL != '' }}
         run: node scripts/smoke.mjs "${{ vars.APP_URL }}" "${{ github.sha }}"
+      # If the live check fails, put the previous version back so the phone keeps working, then still mark the run as failed.
+      - name: Roll back to the previous version
+        if: ${{ failure() && steps.smoke.outcome == 'failure' }}
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: rollback --message "Automatic rollback - live check failed for ${{ github.sha }}"
+      - name: Confirm the rollback is live
+        if: ${{ failure() && steps.smoke.outcome == 'failure' }}
+        run: node scripts/smoke.mjs "${{ vars.APP_URL }}"

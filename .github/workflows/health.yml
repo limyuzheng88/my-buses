@@ -1,0 +1,52 @@
+# Checks the live app every hour. If something is broken, opens a GitHub issue labelled "health" (GitHub emails you),
+# keeps its description up to date while the problem lasts, and closes it once everything passes again.
+# Run it by hand from the Actions tab: Health check, Run workflow.
+name: Health check
+
+on:
+  schedule:
+    - cron: '23 * * * *'      # every hour at :23 (UTC); off the hour, when GitHub's scheduler is less busy
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: health-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check the live app
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run the checks
+        id: check
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          node scripts/health.mjs "${{ vars.APP_URL }}" | tee health.txt
+      - name: Open or update the health issue
+        if: steps.check.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo "The hourly health check of ${{ vars.APP_URL }} failed."; echo; echo '```'; cat health.txt; echo '```'; echo; echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"; } > body.md
+          gh label create health --color d73a4a --description "Live app health check" 2>/dev/null || true
+          open=$(gh issue list --label health --state open --json number --jq '.[0].number')
+          if [ -n "$open" ]; then gh issue edit "$open" --body-file body.md; else gh issue create --title "Live app health check failing" --label health --body-file body.md; fi
+          exit 1
+      - name: Close the health issue once healthy again
+        if: steps.check.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for n in $(gh issue list --label health --state open --json number --jq '.[].number'); do
+            gh issue close "$n" --comment "Healthy again: $(tail -n 1 health.txt)"
+          done
