@@ -975,6 +975,38 @@ function showTab(next, smooth = false) {
   else { pager.scrollTo({ left, behavior: 'instant' }); clearTimeout(settleTimer); settle(); }
 }
 for (const b of document.querySelectorAll('#tabs button')) b.addEventListener('click', () => showTab(b.dataset.tab, true));
+// Swiping that starts outside the page panels (the empty space below a short page, the margins, the top bar) moves the pages too.
+// Inside the panels the browser's own sideways scrolling does this; out here the finger is followed by hand, then the strip
+// glides to the nearer page (or the next one, after a quick flick).
+{
+  let start = null, mode = null;   // mode: null until the direction is clear, then 'x' (ours) or 'y' (a normal page scroll)
+  const outside = (t) => !t.closest('#pager, dialog, input, select, textarea, .fab');
+  document.addEventListener('touchstart', (e) => {
+    start = null; mode = null;
+    if (!tripsReady || e.touches.length !== 1 || !outside(e.target)) return;
+    const t = e.touches[0];
+    if (t.clientX < 20 || t.clientX > window.innerWidth - 20) return;   // the phone's own back gesture lives at the edges
+    start = { x: t.clientX, y: t.clientY, left: pager.scrollLeft, at: Date.now() };
+  }, { passive: true });
+  document.addEventListener('touchmove', (e) => {
+    if (!start) return;
+    const t = e.touches[0], dx = t.clientX - start.x, dy = t.clientY - start.y;
+    if (!mode) { if (Math.hypot(dx, dy) < 10) return; mode = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'; if (mode === 'x') pager.style.scrollSnapType = 'none'; }
+    if (mode !== 'x') return;
+    pager.scrollLeft = Math.min(maxScroll(), Math.max(0, start.left - dx));   // follows the finger; the scroll handler moves the tab highlight
+  }, { passive: true });
+  const end = (e) => {
+    if (!start || mode !== 'x') { start = null; return; }
+    const t = e.changedTouches[0], dx = t.clientX - start.x, fast = Math.abs(dx) / Math.max(1, Date.now() - start.at) > 0.5;
+    const from = start.left > maxScroll() / 2 ? 'trip' : 'bus';
+    const next = Math.abs(dx) > pager.clientWidth / 2 || (fast && Math.abs(dx) > 30) ? (dx < 0 ? 'trip' : 'bus') : from;
+    start = null; mode = null;
+    showTab(next, true);
+    setTimeout(() => { pager.style.scrollSnapType = ''; }, 450);   // snapping back on once the glide has finished
+  };
+  document.addEventListener('touchend', end, { passive: true });
+  document.addEventListener('touchcancel', end, { passive: true });
+}
 if ('ResizeObserver' in window) { const ro = new ResizeObserver(() => { if (!sliding) fitHeight(); }); ro.observe(pages.bus); ro.observe(pages.trip); }
 // Re-align after the width changes (rotation). Height-only changes, such as the browser's address bar sliding away or the keyboard opening, must not move the strip.
 let lastWidth = window.innerWidth;
