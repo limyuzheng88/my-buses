@@ -97,6 +97,16 @@ const onScreen = (b) => b && b.y >= 110 && b.y + Math.min(b.height, 480) <= 700;
   ok('swiping right goes back to Buses', (await shown()).on === 'bus' && (await shown()).bus === 16, JSON.stringify(await shown()));
   await drag(330, 420, 70, 420);
   ok('swiping left goes to Trips', (await shown()).on === 'trip', JSON.stringify(await shown()));
+  // swipes that start outside the panels: the empty space under the short Trips page, and the top bar
+  ok('the Trips page is short enough to leave empty space below it', await page.evaluate(() => document.getElementById('trip').getBoundingClientRect().bottom < 600));
+  await drag(80, 650, 320, 650);
+  ok('swiping on the empty space below the panel goes to Buses', (await shown()).on === 'bus' && (await shown()).bus === 16, JSON.stringify(await shown()));
+  await drag(320, 35, 80, 35);
+  ok('swiping on the top bar goes to Trips', (await shown()).on === 'trip' && (await shown()).trip === 16, JSON.stringify(await shown()));
+  await drag(200, 650, 160, 652, 20);
+  ok('a short, slow nudge outside the panels springs back', (await shown()).on === 'trip' && (await shown()).trip === 16, JSON.stringify(await shown()));
+  await page.evaluate(() => { window.scrollTo(0, 0); }); const y0 = await page.evaluate(() => window.scrollY);
+  ok('page snapping is back on after the swipe', await page.evaluate(() => document.getElementById('pager').style.scrollSnapType === ''), String(y0));
   await page.reload(); await page.waitForTimeout(2500);
   ok('reopening the app returns to the last page', (await shown()).on === 'trip', JSON.stringify(await shown()));
   ok('no script errors (pages)', !errors.length, errors.join(' | '));
