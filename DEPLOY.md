@@ -66,7 +66,7 @@ How it works: every minute Cloudflare runs the Worker. While an alert time is ru
 
 Free limits this uses (checked Oct 2026): KV allows 100,000 reads and 1,000 writes a day. The job does one read a minute (1,440 a day). Writes happen only when you change settings or tap Stop.
 
-Useful for troubleshooting: `<your address>/api/push/run` runs the every-minute check on demand and shows what it did. Add `?force=1` to send the notification now instead of waiting for the next interval.
+Useful for troubleshooting: `<your address>/api/push/run?token=<RUN_TOKEN>` runs the every-minute check on demand (owner only: set a long random `RUN_TOKEN` secret on the Worker first; without it this address answers 404) and shows what it did. Add `?force=1` to send the notification now instead of waiting for the next interval.
 
 ## Trip planning (one-time setup)
 
@@ -110,7 +110,7 @@ How it works:
 - Locations: a 6-digit postal code in the event location is the most reliable. A saved place whose name appears in the location (for example "Office") is used directly.
 - All-day events and events without a location are ignored.
 
-Check it: `<your address>/api/push/run?force=1` plans now and sends a "Preview:" notification of the current plan. The page also shows what was planned, or why it could not be.
+Check it: `<your address>/api/push/run?force=1&token=<RUN_TOKEN>` plans now and sends a "Preview:" notification of the current plan. The page also shows what was planned, or why it could not be.
 
 ## The two features, as named in the app
 

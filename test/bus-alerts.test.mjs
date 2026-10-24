@@ -48,7 +48,7 @@ const store = new Map(); let writes = 0, reads = 0;
 const KV = { get: async (k, t) => { reads++; const v = store.get(k); return v == null ? null : t === 'json' ? JSON.parse(v) : v; }, put: async (k, v) => { writes++; store.set(k, v); }, delete: async (k) => store.delete(k) };
 const phones = () => JSON.parse(store.get('phones') || '{"ids":[]}').ids;
 const dev = () => { const id = phones()[0]; if (!id) return undefined; const g = (p) => (store.has(`p:${id}:${p}`) ? JSON.parse(store.get(`p:${id}:${p}`)) : undefined); return { ...g('reg'), muted: g('muted'), manual: g('manual'), plan: g('plan'), log: g('log') }; };
-const env = { LTA_ACCOUNT_KEY: 'testkey', LTA_BASE: 'http://127.0.0.1:3222/ltaodataservice', KV, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, PUSH_TEST_HOST: '127.0.0.1:3299' };
+const env = { RUN_TOKEN: 'owner-token', LTA_ACCOUNT_KEY: 'testkey', LTA_BASE: 'http://127.0.0.1:3222/ltaodataservice', KV, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, PUSH_TEST_HOST: '127.0.0.1:3299' };
 const call = async (p, init, e = env) => { const r = await w.fetch(new Request('https://my-buses.example.workers.dev' + p, init), e); return [r.status, await r.json().catch(() => null)]; };
 const post = (p, body, e) => call(p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }, e);
 const endpoint = 'http://127.0.0.1:3299/push/abc';
@@ -109,18 +109,18 @@ const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
 const yest = new Date(Date.now() + 8 * 3600e3 - 864e5).toISOString().slice(0, 10);
 await sync([stop([{ id: 'now', days: [], dates: [today, yest], from: '00:00', to: '23:59', every: 2 }, { id: 'tail', days: [], dates: [today, yest], from: '23:59', to: '00:00', every: 2 }])]);
 received.length = 0;
-const r1 = (await call('/api/push/run?force=1'))[1];
+const r1 = (await call('/api/push/run?force=1&token=owner-token'))[1];
 const m = received[0]?.message;
 ok('forced run sends the bus times', r1.sent === 1 && m.title === 'Leave now: Bus 74 in 4 min' && m.body === '74: 4, 13 min\nHotel Grand Pacific (01012)' && m.tag === 'stop-01012' && m.stop === '01012' && typeof m.alarm === 'string', JSON.stringify(r1) + ' ' + JSON.stringify(m));
 writes = 0;
-ok('sending costs no storage writes', (await call('/api/push/run?force=1'))[1].sent === 1 && writes === 0, `writes=${writes}`);
+ok('sending costs no storage writes', (await call('/api/push/run?force=1&token=owner-token'))[1].sent === 1 && writes === 0, `writes=${writes}`);
 const st1 = (await post('/api/push/stop', { endpoint, code: '01012', alarm: m.alarm }))[1];
 ok('Stop returns when the run ends', st1.ok && st1.until > Date.now(), JSON.stringify(st1));
 received.length = 0;
-const r2 = (await call('/api/push/run?force=1'))[1];
+const r2 = (await call('/api/push/run?force=1&token=owner-token'))[1];
 ok('after Stop: no more notifications in this run', r2.sent === 0 && received.length === 0 && r2.running >= 1, JSON.stringify(r2));
 const s2 = (await sync([stop([{ id: m.alarm, days: [], dates: [today, yest], from: '00:00', to: '23:59', every: 2 }])]))[1];
-ok('app learns the alarm is stopped, and Stop survives a settings sync', s2.muted[`01012|${m.alarm}`] === st1.until && (await call('/api/push/run?force=1'))[1].sent === 0, JSON.stringify(s2.muted));
+ok('app learns the alarm is stopped, and Stop survives a settings sync', s2.muted[`01012|${m.alarm}`] === st1.until && (await call('/api/push/run?force=1&token=owner-token'))[1].sent === 0, JSON.stringify(s2.muted));
 ok('Stop on an alarm that is not running does nothing', (await post('/api/push/stop', { endpoint, code: '01012', alarm: 'nope' }))[1].until === null);
 ok('Stop from an unknown phone is refused', (await post('/api/push/stop', { endpoint: endpoint + 'zzz', code: '01012', alarm: 'now' }))[0] === 404);
 
@@ -131,10 +131,10 @@ ok('old format accepted as one alarm', s3.rules === 1 && await tick(sg(2026, 10,
 // --- interval limits and no-estimate wording
 await sync([stop([{ id: 'lim', days: [0, 1, 2, 3, 4, 5, 6], dates: [], from: '00:00', to: '23:59', every: 1 }], { followed: ['74', '9', '999'], threshold: 3 })]);
 ok('interval is kept between 2 and 60', dev().stops[0].alarms[0].every === 2, String(dev().stops[0].alarms[0].every));
-received.length = 0; await call('/api/push/run?force=1');
+received.length = 0; await call('/api/push/run?force=1&token=owner-token');
 ok('wording when no bus is within the leave-now minutes, and for buses with no estimate', received[0].message.title === 'Bus 74 in 4 min' && received[0].message.body.startsWith('74: 4, 13 min · 9: no estimate · 999: no estimate'), JSON.stringify(received[0].message));
 
-respond = 410; received.length = 0; await call('/api/push/run?force=1');
+respond = 410; received.length = 0; await call('/api/push/run?force=1&token=owner-token');
 ok('410 removes the device', phones().length === 0);
 
 // --- stops on the map: only those inside the area asked for, with their position
@@ -145,4 +145,8 @@ ok('410 removes the device', phones().length === 0);
   ok('a malformed area is refused', (await call('/api/stops/area?box=north,pole'))[0] === 400 && (await call('/api/stops/area?box=1.3,103.9,1.2,103.8'))[0] === 400);
   const [, r3] = await call('/api/stops?q=bugis');
   ok('name search returns the stop with its position, for the map', r3.stops.length === 1 && r3.stops[0].code === '83139' && r3.stops[0].lat === 1.30012 && r3.stops[0].lng === 103.85561, JSON.stringify(r3)); }
+// --- the on-demand run is for the owner only
+ok('run without the token is hidden', (await call('/api/push/run?force=1'))[0] === 404 && (await call('/api/push/run?force=1&token=wrong'))[0] === 404);
+ok('run with the token in a header works', (await call('/api/push/run', { headers: { authorization: 'Bearer owner-token' } }))[0] === 200);
+ok('run does not exist when no token is set on the Worker', (await call('/api/push/run?token=owner-token', undefined, { ...env, RUN_TOKEN: undefined }))[0] === 404);
 srv.close();

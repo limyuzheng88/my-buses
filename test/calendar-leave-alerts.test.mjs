@@ -8,7 +8,7 @@ const store = new Map(); let writes = 0;
 const KV = { get: async (k, t) => { const v = store.get(k); return v == null ? null : t === 'json' ? JSON.parse(v) : v; }, put: async (k, v) => { if (k !== 'cron') writes++; store.set(k, v); }, delete: async (k) => store.delete(k) };
 const phones = () => JSON.parse(store.get('phones') || '{"ids":[]}').ids;
 const dev = () => { const id = phones()[0]; if (!id) return undefined; const g = (p) => (store.has(`p:${id}:${p}`) ? JSON.parse(store.get(`p:${id}:${p}`)) : undefined); return { ...g('reg'), muted: g('muted'), manual: g('manual'), plan: g('plan'), log: g('log') }; };
-const env = { DEDUPE_OFF: '1', LTA_ACCOUNT_KEY: 'testkey', LTA_BASE: 'http://127.0.0.1:3222/ltaodataservice', KV, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, PUSH_TEST_HOST: '127.0.0.1:3299',
+const env = { RUN_TOKEN: 'owner-token', DEDUPE_OFF: '1', LTA_ACCOUNT_KEY: 'testkey', LTA_BASE: 'http://127.0.0.1:3222/ltaodataservice', KV, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, PUSH_TEST_HOST: '127.0.0.1:3299',
   GOOGLE_CLIENT_ID: 'cid', GOOGLE_CLIENT_SECRET: 'csecret', GOOGLE_AUTH_URL: 'http://127.0.0.1:3277/auth', GOOGLE_TOKEN_URL: 'http://127.0.0.1:3277/token', GOOGLE_API_BASE: 'http://127.0.0.1:3277/cal', GOOGLE_REVOKE_URL: 'http://127.0.0.1:3277/revoke',
   ONEMAP_BASE: 'http://127.0.0.1:3288', ONEMAP_EMAIL: 'me@example.com', ONEMAP_PASSWORD: 'pw' };
 const O = 'https://my-buses.example.workers.dev';
@@ -99,7 +99,7 @@ ok('no starting place: plan says why, no alert', dev().plan.failed === 'no start
 // --- preview on demand
 await sync({ enabled: true, lead: 10, origin: HOME }, session);
 received.length = 0;
-const run = await (await req('/api/push/run?force=1')).json();
+const run = await (await req('/api/push/run?force=1&token=owner-token')).json();
 ok('forced run plans and sends a preview', received.length === 1 && /^Preview: Leave in \d+ min for Dentist$/.test(received[0].message.title) && run.trips.devices[0].title === 'Dentist' && String(run.trips.devices[0].sent).startsWith('preview'), JSON.stringify(run.trips) + JSON.stringify(received[0]?.message));
 ok('live bus time added when the bus is near', true);
 

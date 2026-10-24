@@ -90,6 +90,14 @@ function stopsInArea(box) {
   return { total: inside.length, stops: inside.slice(0, 400).map(([code, name, road, lat, lng]) => ({ code, name, road, lat, lng })) };
 }
 
+// Compares two secrets without the time taken depending on where they first differ.
+async function sameSecret(a, b) {
+  const h = async (v) => new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(v || ''))));
+  const [x, y] = await Promise.all([h(a), h(b)]);
+  let diff = 0; for (let i = 0; i < x.length; i += 1) diff |= x[i] ^ y[i];
+  return diff === 0;
+}
+
 // Lets you check which key a deployment holds without revealing it: its length and a short fingerprint.
 async function keyInfo(env) {
   const k = String(env.LTA_ACCOUNT_KEY || '').trim();
@@ -437,7 +445,13 @@ async function pushRoutes(request, env, url) {
     if (url.pathname === '/api/push/trip' && request.method === 'POST') return await pushTrip(request, env);
     if (url.pathname === '/api/push/unsubscribe' && request.method === 'POST') return await pushUnsubscribe(request, env);
     // Runs the every-minute check on demand. Add ?force=1 to send now instead of waiting for the next interval.
-    if (url.pathname === '/api/push/run' && request.method === 'GET') return json(200, await runAlerts(env, Date.now(), url.searchParams.get('force') === '1'));
+    // Owner only: its answer names calendar appointments, and force=1 notifies every phone. Needs the RUN_TOKEN secret,
+    // given as ?token=... or an "Authorization: Bearer ..." header; without the secret set on the Worker, the route does not exist.
+    if (url.pathname === '/api/push/run' && request.method === 'GET') {
+      const given = url.searchParams.get('token') || (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+      if (!env.RUN_TOKEN || !(await sameSecret(given, env.RUN_TOKEN))) return json(404, { error: 'Not found' });
+      return json(200, await runAlerts(env, Date.now(), url.searchParams.get('force') === '1'));
+    }
     return new Response('Not found', { status: 404 });
   } catch (err) {
     return json(500, { error: 'Push alerts failed', detail: String(err.message || err) });
