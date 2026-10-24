@@ -21,4 +21,5 @@ crons = ["* * * * *"]
 enabled = true
 
 # Secrets are NOT in this file or this repository. They live on the Worker in Cloudflare and survive deploys:
-#   LTA_ACCOUNT_KEY, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, ONEMAP_EMAIL, ONEMAP_PASSWORD, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+#   LTA_ACCOUNT_KEY, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, ONEMAP_EMAIL, ONEMAP_PASSWORD, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
+#   and optionally RUN_TOKEN (lets you trigger /api/push/run by hand; without it that address does not exist)
