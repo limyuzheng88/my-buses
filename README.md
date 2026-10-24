@@ -1,6 +1,6 @@
 # My Buses
 
-A phone-friendly web app for Singapore bus commuters, running free on Cloudflare Workers. 
+A phone-friendly web app for Singapore bus commuters, running free on Cloudflare Workers.
 
 - **Bus arrival notifier.** Live arrival times for bookmarked stops (LTA DataMall), with notifications at the days and times you choose.
 - **Trip departure notifier.** Plans a public transport route (OneMap) and notifies you before you need to leave, for routes you plan and for Google Calendar appointments.
@@ -47,9 +47,21 @@ Rules that keep this honest:
 - **Small pull requests.** One change each; easier to review, easier to undo.
 - **A red pipeline is the first thing to fix.** Do not merge over it.
 
+## The pipeline
+
+| When | Workflow | What it does |
+| --- | --- | --- |
+| Every push to a branch, every pull request | `ci.yml`: **Test and build** | `npm test` (the server and its logic, against stand-ins for LTA, OneMap, Google and push), then builds the Worker |
+| Same | `ci.yml`: **Screen tests** | `npm run test:ui`: drives the app in a phone-sized browser (tabs and swipes, editing without the screen jumping, the floating button, finding stops on the map, asking for notifications) |
+| Merge to `main` | `deploy.yml` | Tests again, deploys to Cloudflare, checks the live app serves this commit; if that check fails, rolls back to the previous version automatically |
+| Every hour | `health.yml` | Checks the live app: the every-minute schedule, LTA, OneMap, settings. Opens a GitHub issue labelled `health` when something fails (GitHub emails you) and closes it when it recovers |
+
+Screen tests on your own computer (optional; CI always runs them): `npm install --no-save playwright` and `npx playwright install chromium` once, then `npm run test:ui`. Check the live app by hand: `npm run health -- https://<your app address>`.
+
 ## Undoing a bad deploy
 
-- **Fastest:** in Cloudflare, open the Worker, Deployments, and roll back to the previous version. Then fix `main` so the next deploy does not bring the problem back.
+- **Automatic:** if the live check right after a deploy fails, the pipeline rolls back by itself and the run shows red.
+- **Fastest by hand:** in Cloudflare, open the Worker, Deployments, and roll back to the previous version. Then fix `main` so the next deploy does not bring the problem back.
 - **Proper:** `git revert <commit>` on a branch, pull request, merge. The pipeline deploys the reverted code.
 
 ## Working from another device

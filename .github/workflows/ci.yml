@@ -1,5 +1,5 @@
 # Runs on every pull request and every push to a branch other than main.
-# A pull request cannot be merged unless this passes (once branch protection is on).
+# A pull request cannot be merged unless these pass (once branch protection requires "Test and build" and "Screen tests").
 name: CI
 
 on:
@@ -29,3 +29,20 @@ jobs:
           name: worker
           path: dist/worker.js
           retention-days: 7
+
+  screens:
+    name: Screen tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Playwright drives a real Chromium. It is installed only here, so the app itself still has no dependencies.
+      - name: Install the test browser
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.0
+          npx playwright install --with-deps chromium
+      - name: Run the screen tests (phone-sized browser)
+        run: npm run test:ui

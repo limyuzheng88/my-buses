@@ -54,8 +54,16 @@ What the first deploy changes on Cloudflare: the schedule (`* * * * *`) and logg
 In the GitHub repository open Settings, Branches (or Rules), and add a rule for `main`:
 
 - Require a pull request before merging.
-- Require status checks to pass, and select **Test and build**.
+- Require status checks to pass, and select **Test and build** and **Screen tests**.
 - Do not allow bypassing (include administrators), if you want the rule to apply to you too.
+
+## 6. Turn on secret scanning
+
+In the repository: Settings, Advanced Security (or "Code security"). Turn on **Secret Protection** (secret scanning) and **Push protection**. GitHub then refuses a push that contains something that looks like a key or token, and alerts you if one is already in the history. Free for public repositories.
+
+## 7. Health check and rollback
+
+Nothing to set up: both use the `APP_URL` variable from step 3. The Health check workflow runs every hour; run it once by hand (Actions, Health check, Run workflow) to see it pass. GitHub pauses scheduled workflows after 60 days with no activity in the repository; if that happens, the Actions tab shows a button to turn it back on.
 
 From here on, follow "Working on it: the routine" in `README.md`.
 
@@ -63,4 +71,3 @@ From here on, follow "Working on it: the routine" in `README.md`.
 
 - **Approval before deploy.** The deploy job runs in a GitHub environment named `production`. In Settings, Environments, you can require a manual approval click before each deploy.
 - **A staging copy.** A second Worker (`my-buses-staging`) with its own KV namespace and secrets, deployed from pull requests, so changes can be tried on a phone before they reach `main`.
-- **Browser tests.** The suites test the server and its logic. Tests that drive the page in a real browser can be added with Playwright as a separate CI job.

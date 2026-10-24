@@ -10,6 +10,8 @@
     "build": "node build-worker.mjs",
     "stops": "node scripts/fetch-stops.mjs",
     "start": "node --use-system-ca server.js",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "health": "node scripts/health.mjs",
+    "test:ui": "node test/ui/screens.mjs"
   }
 }
